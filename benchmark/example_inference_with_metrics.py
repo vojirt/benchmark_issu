@@ -1,8 +1,7 @@
-
 import numpy as np
 from tqdm import tqdm
 import cv2 as cv
-from road_anomaly_benchmark.evaluation import Evaluation
+from evaluation import Evaluation
 
 def method_dummy(image, **_):
 	""" Very naive method: return color saturation """
@@ -12,7 +11,6 @@ def method_dummy(image, **_):
 
 
 def main():
-
 	ev = Evaluation(
 		method_name = 'Dummy', 
 		dataset_name = 'ObstacleTrack-validation',

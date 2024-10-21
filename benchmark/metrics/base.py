@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 from easydict import EasyDict
 
-from ..datasets.dataset_registry import Registry
+from datasets.dataset_registry import Registry
 
 
 MetricRegistry = Registry()

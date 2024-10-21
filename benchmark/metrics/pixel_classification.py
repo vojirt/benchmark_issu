@@ -6,11 +6,11 @@ import numpy as np
 from matplotlib import pyplot
 from easydict import EasyDict
 
-from .base import EvaluationMetric, MetricRegistry, save_figure, save_table
-from .pixel_classification_curves import BinaryClassificationCurve, curves_from_cmats, plot_classification_curves, reduce_curve_resolution
+from metrics.base import EvaluationMetric, MetricRegistry, save_figure, save_table
+from metrics.pixel_classification_curves import BinaryClassificationCurve, curves_from_cmats, plot_classification_curves, reduce_curve_resolution
 
-from ..evaluation import DIR_OUTPUTS
-from ..jupyter_show_image import adapt_img_data, get_heat, imwrite
+from paths import DIR_OUTPUTS
+from datasets.utils import adapt_img_data, get_heat, imwrite
 
 
 def binary_confusion_matrix(

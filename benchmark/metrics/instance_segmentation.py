@@ -7,10 +7,10 @@ from easydict import EasyDict
 from scipy.ndimage.measurements import label
 from pathlib import Path
 
-from .base import EvaluationMetric, MetricRegistry
-from ..evaluation import DIR_OUTPUTS
-from ..datasets.dataset_io import hdf5_write_hierarchy_to_file, hdf5_read_hierarchy_from_file
-from ..jupyter_show_image import adapt_img_data, imwrite, imread, image_montage_same_shape
+from metrics.base import EvaluationMetric, MetricRegistry
+from paths import DIR_OUTPUTS
+from datasets.dataset_io import hdf5_write_hierarchy_to_file, hdf5_read_hierarchy_from_file
+from datasets.utils import adapt_img_data, imwrite, imread, image_montage_same_shape
 
 from matplotlib.pyplot import get_cmap
 

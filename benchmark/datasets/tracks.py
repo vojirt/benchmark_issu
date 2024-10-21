@@ -7,9 +7,9 @@ import logging, re
 from easydict import EasyDict
 import numpy as np
 
-from ..paths import DIR_DATASETS
-from .dataset_registry import DatasetRegistry
-from .dataset_io import DatasetBase, ChannelLoaderImage
+from paths import DIR_DATASETS
+from datasets.dataset_registry import DatasetRegistry
+from datasets.dataset_io import DatasetBase, ChannelLoaderImage
 
 
 log = logging.getLogger(__name__)

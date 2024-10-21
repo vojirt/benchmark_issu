@@ -6,7 +6,7 @@ import logging
 from easydict import EasyDict
 import numpy as np
 import h5py
-from ..jupyter_show_image import imread, imwrite
+from datasets.utils import imread, imwrite
 
 log = logging.getLogger(__name__)
 
