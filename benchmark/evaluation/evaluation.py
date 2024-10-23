@@ -31,7 +31,12 @@ class Evaluation:
             str(DIR_OUTPUTS / "anomaly_p/{method_name}/{dset_name}/{fid}.hdf5"),
             compression = 9,
         ),
-        'anomaly_mask_path': str(DIR_OUTPUTS / "anomaly_masks/{method_name}/{dset_name}/{fid}.png")
+        'class_p': ChannelLoaderHDF5(
+            str(DIR_OUTPUTS / "class_p/{method_name}/{dset_name}/{fid}.hdf5"),
+            compression = 9,
+        ),
+        'anomaly_mask_path': str(DIR_OUTPUTS / "anomaly_masks/{method_name}/{dset_name}/{fid}.png"),
+        'class_mask_path': str(DIR_OUTPUTS / "class_masks/{method_name}/{dset_name}/{fid}.png")
     }
 
     threads = None
@@ -61,22 +66,26 @@ class Evaluation:
             raise e
 
 
-    def save_output(self, frame, anomaly_p):
-        value = anomaly_p.astype(np.float16)
+    def save_output(self, frame, results):
+        anomaly_p = results.anomaly_scores
+        class_p = results.pred_id_labels
 
         write_func = partial(
             self.write_task, 
             self.channels['anomaly_p'], 
-            value, 
+            anomaly_p.astype(np.float16), 
             dict(method_name = self.method_name, **frame),
         )
 
-        if self.threads is not None:
-            self.threads.submit(write_func)
-        else:
-            write_func()
+        write_func_id = partial(
+            self.write_task, 
+            self.channels['class_p'], 
+            class_p.astype(np.uint8),
+            dict(method_name = self.method_name, **frame),
+        )
 
-        # self.channels['anomaly_p'].write(value, method_name = self.method_name, **frame)
+        write_func()
+        write_func_id()
     
 
     def run_metric_single(self, metric_name, sample=None, frame_vis=False, default_instancer=True):
