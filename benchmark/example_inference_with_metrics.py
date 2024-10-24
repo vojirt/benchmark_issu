@@ -22,9 +22,28 @@ def method_result_loader_PixOOD(method_name, dset_name, fid, results_root_dir):
     return SimpleNamespace(anomaly_scores = results["anomaly_scores"], 
                            pred_id_labels = results["pred_id_labels"]) 
 
+
+
+def simple_dbg(method_name, dset_name, fid, results_root_dir):
+    # EXAMPLE: 'fid': 'validation_1'
+    # load corresponding saved results
+    result_file = os.path.join(results_root_dir, fid + ".png")
+    if not os.path.isfile(result_file):
+        raise FileNotFoundError(f"File not found: {result_file}")
+    from PIL import Image
+    img = Image.open(result_file)
+    pred = np.array(img)
+    H,W = pred.shape
+    score = np.random.rand(H,W)
+    preds = np.uint8(np.random.randint(0, 19, (H,W)))
+    # results = np.load(result_file)
+    return SimpleNamespace(anomaly_scores = score,
+                           pred_id_labels = preds)
+
 def main():
     method_name = "PixOOD_cs_RO"
-    dataset_name = 'IDDObstacleTrack-static'
+    # dataset_name = 'IDDObstacleTrack-static'
+    dataset_name = 'IDDAnomalyTrack-static'
     # dataset_name = 'IDDAnomalyTrack-all'
 
     ev = Evaluation(
@@ -35,12 +54,22 @@ def main():
     for frame in tqdm(ev.get_frames()):
         # run method here
         # result = method_dummy(frame.image)
-        result = method_result_loader_PixOOD(method_name, dataset_name, frame.fid, results_root_dir="./_results")
+        # result = method_result_loader_PixOOD(method_name, dataset_name, frame.fid, results_root_dir="./_results")
+        result = simple_dbg(method_name, dataset_name, frame.fid, results_root_dir="datasets/dataset_IDDTrack/labels_masks")
         # provide the output for saving
         ev.save_output(frame, result)
 
     # wait for the background threads which are saving
     ev.wait_to_finish_saving()
+
+    print("Calculating pixel-level metrics")
+    ev.calculate_metric_from_saved_outputs(
+        'IntersectionOverUnion',
+        frame_vis=False,
+        parallel=True,
+        load_closed_set_preds=True,
+        threshold=0.5,
+    )
 
     print("Calculating pixel-level metrics")
     ev.calculate_metric_from_saved_outputs(

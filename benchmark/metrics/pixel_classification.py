@@ -166,7 +166,7 @@ class MetricPixelClassification(EvaluationMetric):
 		)
 
 
-	def process_frame(self, label_pixel_gt : np.ndarray, anomaly_p : np.ndarray, fid : str=None, dset_name : str=None, method_name : str=None, visualize : bool = True, **_):
+	def process_frame(self, label_pixel_gt : np.ndarray, anomaly_p : np.ndarray, class_p : np.ndarray, fid : str=None, dset_name : str=None, method_name : str=None, visualize : bool = True, **_):
 		"""
 		@param label_pixel_gt: HxW uint8
 			0 = road

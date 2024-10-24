@@ -20,6 +20,16 @@ def confusion_matrix(predicted : np.ndarray, target : np.ndarray, num_classes : 
 	conf_mat = bincount_2d.reshape((num_classes, num_classes))
 	return conf_mat
 
+def compute_confusion_matrix(pred, actual, mask, num_classes):
+	pred_in_roi = pred[mask]
+	actual_in_roi = actual[mask]
+
+	closed_set_cm = confusion_matrix(
+		predicted=pred_in_roi,
+		target=actual_in_roi,
+		num_classes=num_classes,
+	)
+	return closed_set_cm
 
 @MetricRegistry.register_class()
 class MetricPixelRecognition(EvaluationMetric):
@@ -27,10 +37,8 @@ class MetricPixelRecognition(EvaluationMetric):
 	configs = [
 		EasyDict(
 			name = 'IntersectionOverUnion',
-			# pixel scores in a given image are quantized into bins, 
-			# so that big datasets can be stored in memory and processed in parallel
-			num_bins = 768,
-			bin_strategy = 'percentiles',
+			num_classes = 19,
+			treshold = None, # should be set
 		),
 	]
 
@@ -76,20 +84,6 @@ class MetricPixelRecognition(EvaluationMetric):
 		except TypeError:
 			raise RuntimeError(f"No ground truth available for {fid}. Please check dataset path...")
 
-
-		# open-set confusion matrix
-		def compute_confusion_matrix(pred, actual, mask, num_classes):
-			pred_in_roi = pred[mask]
-			actual_in_roi = actual[mask]
-
-			closed_set_cm = confusion_matrix(
-				predicted = pred_in_roi,
-				target = actual_in_roi,
-				num_classes = num_classes,
-			)
-			return closed_set_cm
-
-
 		closed_set_confusion_matrix = compute_confusion_matrix(
 			class_p, label_pixel_gt, mask_roi_closed_set, self.cfg.num_classes)
 
@@ -111,25 +105,25 @@ class MetricPixelRecognition(EvaluationMetric):
 
 
 	def aggregate(self, frame_results : list, method_name : str, dataset_name : str):
-		# fuse cmats FIXED BINS
-
 		closed_set_cmats = [result.closed_set for result in frame_results]
 		closed_set_cmat = sum(closed_set_cmats)
 		closed_set_ious = np.diag(closed_set_cmat) / (np.sum(closed_set_cmat, axis=0) + np.sum(closed_set_cmat, axis=1) - np.diag(closed_set_cmat))
-		miou = np.mean(closed_set_ious)
+		miou = np.nansum(closed_set_ious) / self.cfg.num_classes
 
 		open_set_cmats = [result.open_set for result in frame_results]
 		open_set_cmat = sum(open_set_cmats)
 		open_set_ious = np.diag(open_set_cmat) / (np.sum(open_set_cmat, axis=0) + np.sum(open_set_cmat, axis=1) - np.diag(open_set_cmat))
 		
-		open_miou = np.nansum(open_set_ious[:-1]) / (self.cfg.num_classes)
+		open_miou = np.nansum(open_set_ious[:-1]) / self.cfg.num_classes
 
-		return EasyDict(
+		out = EasyDict(
 			closed_set_ious = closed_set_ious,
 			open_set_ious = open_set_ious[:-1],
 			closed_miou = miou,
 			open_miou = open_miou,
 		)
+		print(out)
+		return out
 
 	def persistence_path_data(self, method_name, dataset_name):
 		return DIR_OUTPUTS / self.name / 'data' / f'PixClassCurve_{method_name}_{dataset_name}.hdf5'
@@ -139,24 +133,14 @@ class MetricPixelRecognition(EvaluationMetric):
 
 	def save(self, aggregated_result, method_name : str, dataset_name : str, path_override : Path = None):
 		out_path = path_override or self.persistence_path_data(method_name, dataset_name)
-		aggregated_result.save(out_path)
+		raise NotImplementedError(f"Saving to {out_path} not implemented yet")
 
-		c_lowres = reduce_curve_resolution(aggregated_result, num_pts=256)
-		c_lowres.save(out_path.with_name(out_path.name.replace('PixClassCurve', 'PixClassCurve-simplified')))
 
 	def load(self, method_name : str, dataset_name : str, path_override : Path = None):
-		out_path = path_override or self.persistence_path_data(method_name, dataset_name)
-		out_path_simplified = out_path.with_name(out_path.name.replace('PixClassCurve', 'PixClassCurve-simplified'))
-
-		if out_path.is_file():
-			return BinaryClassificationCurve.from_file(out_path)
-		elif out_path_simplified.is_file():
-			return BinaryClassificationCurve.from_file(out_path_simplified)
-		else:
-			raise FileNotFoundError(f'No saved curve at {out_path} or {out_path_simplified}')
+		pass
 
 	def fields_for_table(self):
-		return ['area_PRC', 'tpr95_fpr', 'best_f1']
+		return ['open-mIoU', 'closed-mIoU']
 
 	def plot_many(self, aggregated_results : List, comparison_name : str, close : bool = True, method_names={}, plot_formats={}):
 
