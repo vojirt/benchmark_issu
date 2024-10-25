@@ -99,6 +99,11 @@ class Evaluation:
                 metric.cfg.default_instancer = default_instancer
                 if metric.cfg.thresh_p is None and default_instancer:
                     metric.get_thresh_p_from_curve(self.method_name, self.dataset_name)
+            if "Int" in metric_name:
+                metric.cfg.default_instancer = default_instancer
+                if metric.cfg.treshold is None and default_instancer:
+                    thr = metric.get_thresh_p_from_curve(self.method_name, self.dataset_name)
+                    print(f"Using threshold {thr} for metric {metric_name} for method {self.method_name} on dataset {self.dataset_name}")
         except AttributeError:
             print("Perform 'PixBinaryClass' first")
             exit()
@@ -257,12 +262,17 @@ class Evaluation:
 
         metric = MetricRegistry.get(metric_name)
         if threshold is not None:
-            metric.cfg.treshold = threshold
+            metric.cfg.threshold = threshold
         try:
             if "Seg" in metric_name:
                 metric.cfg.default_instancer = default_instancer
                 if metric.cfg.thresh_p is None and default_instancer:
                     metric.get_thresh_p_from_curve(self.method_name, self.dataset_name)
+            if "Int" in metric_name:
+                metric.cfg.default_instancer = default_instancer
+                if metric.cfg.threshold is None and default_instancer:
+                    thr = metric.get_thresh_p_from_curve(self.method_name, self.dataset_name)
+                    print(f"Using threshold {thr} for metric {metric_name} for method {self.method_name} on dataset {self.dataset_name}")
         except AttributeError:
             print("Perform 'PixBinaryClass' first")
             exit()
