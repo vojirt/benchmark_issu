@@ -1,7 +1,7 @@
 
-from typing import List#, Literal
+from typing import List
 from pathlib import Path
-
+from pandas import DataFrame, Series
 import numpy as np
 from matplotlib import pyplot
 from easydict import EasyDict
@@ -11,6 +11,7 @@ from metrics.pixel_classification_curves import BinaryClassificationCurve, curve
 
 from paths import DIR_OUTPUTS
 from datasets.utils import adapt_img_data, get_heat, imwrite
+from metrics.base import save_table
 
 def confusion_matrix(predicted : np.ndarray, target : np.ndarray, num_classes : int):
 	x = predicted + num_classes * target
@@ -121,8 +122,9 @@ class MetricPixelRecognition(EvaluationMetric):
 			open_set_ious = open_set_ious[:-1],
 			closed_miou = miou,
 			open_miou = open_miou,
+			method_name = method_name,
+			dataset_name = dataset_name,
 		)
-		print(out)
 		return out
 
 	def persistence_path_data(self, method_name, dataset_name):
@@ -133,8 +135,7 @@ class MetricPixelRecognition(EvaluationMetric):
 
 	def save(self, aggregated_result, method_name : str, dataset_name : str, path_override : Path = None):
 		out_path = path_override or self.persistence_path_data(method_name, dataset_name)
-		raise NotImplementedError(f"Saving to {out_path} not implemented yet")
-
+		pass
 
 	def load(self, method_name : str, dataset_name : str, path_override : Path = None):
 		pass
@@ -143,19 +144,9 @@ class MetricPixelRecognition(EvaluationMetric):
 		return ['open-mIoU', 'closed-mIoU']
 
 	def plot_many(self, aggregated_results : List, comparison_name : str, close : bool = True, method_names={}, plot_formats={}):
-
-		cinfos = [
-			reduce_curve_resolution(cinfo, num_pts=256)
-			for cinfo in aggregated_results
-		]
-
-		vis_res = plot_classification_curves(cinfos, method_names=method_names, plot_formats=plot_formats)
-		fig = vis_res.plot_figure
-		table = vis_res.score_table
-			
-		save_figure(self.persistence_path_plot(comparison_name, 'PixClassCurves'), fig)
-
-		if close:
-			pyplot.close(fig)
-
+		table = DataFrame(data=[
+			Series({'open_miou': crv.open_miou, 'closed_miou': crv.closed_miou }, name=crv.method_name)
+			for crv in aggregated_results
+		])
+		print(table)
 		save_table(self.persistence_path_plot(comparison_name, 'PixClassTable'), table)
