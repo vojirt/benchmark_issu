@@ -88,10 +88,12 @@ class Evaluation:
         write_func_id()
     
 
-    def run_metric_single(self, metric_name, sample=None, frame_vis=False, default_instancer=True):
+    def run_metric_single(self, metric_name, sample=None, frame_vis=False, default_instancer=True, load_closed_set_preds=False, threshold=None):
         # TODO sample is part of evaluation
 
         metric = MetricRegistry.get(metric_name)
+        if threshold is not None:
+            metric.cfg.treshold = threshold
         try:
             if "Seg" in metric_name:
                 metric.cfg.default_instancer = default_instancer
@@ -126,8 +128,19 @@ class Evaluation:
                 )
                 anomaly_p = np.squeeze(anomaly_p)
 
+                if load_closed_set_preds:
+                    class_p = self.channels['class_p'].read(
+                        method_name = self.method_name,
+                        dset_name = fr.dset_name,
+                        fid = fr.fid,
+                    )
+                    class_p = np.squeeze(class_p)
+                else:
+                    class_p = None
+
                 fr_result = metric.process_frame(
                     anomaly_p = anomaly_p,
+                    class_p = class_p,
                     method_name = self.method_name,
                     visualize = bool(frame_vis),
                     **fr,
@@ -151,22 +164,35 @@ class Evaluation:
                 )
                 anomaly_p = np.squeeze(anomaly_p)
 
+                if load_closed_set_preds:
+                    class_p = self.channels['class_p'].read(
+                        method_name = self.method_name,
+                        dset_name = fr.dset_name,
+                        fid = fr.fid,
+                    )
+                    class_p = np.squeeze(class_p)
+                else:
+                    class_p = None
+
                 metric.vis_frame(
                     fid=fr.fid, 
                     dset_name=fr.dset_name, 
                     method_name=self.method_name, 
                     mask_roi=np.ones(fr.image.shape, dtype=bool),
                     anomaly_p=anomaly_p,
+                    class_p=class_p,
                     image = fr.image
                 )
 
     @classmethod
-    def metric_worker(cls, method_name, metric_name, frame_vis, default_instancer, dataset_name_and_frame_idx):
+    def metric_worker(cls, method_name, metric_name, frame_vis, default_instancer, dataset_name_and_frame_idx, load_closed_set_preds=False, threshold=None):
         try:
             dataset_name, frame_idx = dataset_name_and_frame_idx
 
             dset = DatasetRegistry.get(dataset_name)
             metric = MetricRegistry.get(metric_name)
+            if threshold is not None:
+                metric.cfg.treshold = threshold
 
             frame_vis_only = frame_vis == 'only'
 
@@ -191,13 +217,24 @@ class Evaluation:
                 if heatmap.shape[1] < fr.image.shape[1]:
                     heatmap = cv.resize(heatmap.astype(np.float32), fr.image.shape[:2][::-1],
                                         interpolation=cv.INTER_LINEAR)
+
+                if load_closed_set_preds:
+                    class_p = cls.channels['class_p'].read(
+                        method_name = method_name,
+                        dset_name = fr.dset_name,
+                        fid = fr.fid,
+                    )
+                    class_p = np.squeeze(class_p)
+                else:
+                    class_p = None
             else:
                 heatmap = None
 
             if not frame_vis_only:
                 result = metric.process_frame(
                     anomaly_p = heatmap,
-                    method_name = method_name, 
+                    class_p = class_p,
+                    method_name = method_name,
                     visualize = bool(frame_vis),
                     **fr,
                 )
@@ -216,9 +253,11 @@ class Evaluation:
             raise e
 
 
-    def run_metric_parallel(self, metric_name, sample=None, frame_vis=False, default_instancer=True):
+    def run_metric_parallel(self, metric_name, sample=None, frame_vis=False, default_instancer=True, load_closed_set_preds=False, threshold=None):
 
         metric = MetricRegistry.get(metric_name)
+        if threshold is not None:
+            metric.cfg.treshold = threshold
         try:
             if "Seg" in metric_name:
                 metric.cfg.default_instancer = default_instancer
@@ -241,7 +280,7 @@ class Evaluation:
 
         with multiprocessing.Pool() as pool:
             it = pool.imap_unordered(
-                partial(self.metric_worker, self.method_name, metric_name, frame_vis, default_instancer),
+                partial(self.metric_worker, self.method_name, metric_name, frame_vis, default_instancer, load_closed_set_preds=load_closed_set_preds, threshold=threshold),
                 tasks,
                 chunksize = 4,
             )
@@ -260,14 +299,14 @@ class Evaluation:
     
 
     def calculate_metric_from_saved_outputs(self, metric_name, sample=None, parallel=True, show_plot=False,
-                                            frame_vis=False, default_instancer=True):
+                                            frame_vis=False, default_instancer=True, load_closed_set_preds=False, threshold=None):
 
         metric = MetricRegistry.get(metric_name)
 
         if parallel:
-            ag = self.run_metric_parallel(metric_name, sample, frame_vis, default_instancer)
+            ag = self.run_metric_parallel(metric_name, sample, frame_vis, default_instancer, load_closed_set_preds, threshold)
         else:
-            ag = self.run_metric_single(metric_name, sample, frame_vis, default_instancer)
+            ag = self.run_metric_single(metric_name, sample, frame_vis, default_instancer, load_closed_set_preds, threshold)
 
         if ag is not None:
             dset_name = sample[0] if sample is not None else self.dataset_name
