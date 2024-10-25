@@ -5,6 +5,9 @@ import cv2 as cv
 from evaluation import Evaluation
 from types import SimpleNamespace
 
+import ipdb
+import traceback
+
 def method_dummy(image, **_):
     """ Very naive method: return color saturation """
     image_hsv = cv.cvtColor(image, cv.COLOR_RGB2HSV_FULL)
@@ -12,7 +15,6 @@ def method_dummy(image, **_):
     return anomaly_p
 
 def method_result_loader_PixOOD(method_name, dset_name, fid, results_root_dir):
-    # EXAMPLE: 'fid': 'validation_1'
     # load corresponding saved results
     result_file = os.path.join(results_root_dir, method_name, fid + ".npz")
     if not os.path.isfile(result_file):
@@ -39,51 +41,50 @@ def simple_dbg(method_name, dset_name, fid, results_root_dir):
                            pred_id_labels = preds)
 
 
-def main(method_name, dataset_name):
+def main(method_name, dataset_name, recompute_results=True):
     ev = Evaluation(
         method_name = method_name, 
         dataset_name = dataset_name,
     )
+    
+    if recompute_results:
+        for frame in tqdm(ev.get_frames()):
+            # run method here
+            # result = method_dummy(frame.image)
+            result = method_result_loader_PixOOD(method_name, dataset_name, frame.fid, results_root_dir="./_results")
+            # result = simple_dbg(method_name, dataset_name, frame.fid, results_root_dir="datasets/dataset_IDDTrack/labels_masks")
+            # provide the output for saving
+            ev.save_output(frame, result)
 
-    for frame in tqdm(ev.get_frames()):
-        # run method here
-        # result = method_dummy(frame.image)
-        # result = method_result_loader_PixOOD(method_name, dataset_name, frame.fid, results_root_dir="./_results")
-        result = simple_dbg(method_name, dataset_name, frame.fid, results_root_dir="datasets/dataset_IDDTrack/labels_masks")
-        # provide the output for saving
-        ev.save_output(frame, result)
+        # wait for the background threads which are saving
+        ev.wait_to_finish_saving()
 
-    # wait for the background threads which are saving
-    ev.wait_to_finish_saving()
-
-    print("Calculating pixel-level open-set metrics")
-    ev.calculate_metric_from_saved_outputs(
-        'IntersectionOverUnion',
-        frame_vis=False,
-        parallel=True,
-        load_closed_set_preds=True,
-        threshold=0.5,
-    )
-
-    print("Calculating pixel-level metrics")
-    ev.calculate_metric_from_saved_outputs(
-        'PixBinaryClass',
-        frame_vis=True,
-    )
-
-    print("Calculating instance-level metrics")
-    ev.calculate_metric_from_saved_outputs(
-        'SegEval-ObstacleTrack',
-        frame_vis=True,
-    )
+    if "Full" in dataset_name:
+        ev.calculate_metric_from_saved_outputs(
+            'IntersectionOverUnion',
+            frame_vis=False,
+            parallel=True,
+            load_closed_set_preds=True,
+        )
+    else:
+        print("Calculating pixel-level metrics")
+        ev.calculate_metric_from_saved_outputs(
+            'PixBinaryClass',
+            frame_vis=True,
+        )
+        print("Calculating instance-level metrics")
+        ev.calculate_metric_from_saved_outputs(
+            'SegEval-ObstacleTrack',
+            frame_vis=True,
+        )
 
 if __name__ == '__main__':
-
-    # method_names = ["PixOOD_cs_RA", "PixOOD_cs_RO", "PixOOD_IDD_RO", "PixOOD_IDD_RA"]
     method_names = ["PixOOD_IDD_RA"]
-    dataset_names = ['IDDAnomalyTrack-static', 'IDDAnomalyTrack-temporal', 'IDDObstacleTrack-static',  'IDDObstacleTrack-temporal']
+    # NOTE: Regular track (without 'Full' in name) needts to be computed first to estimate threholds for the 'Full' evals open-miou metric
+    dataset_names = ['IDDAnomalyTrack-static', 'IDDAnomalyFullTrack-static']
+    recompute_results = True
 
     for method in method_names:
         for dataset in dataset_names:
             print("\033[104m" + f"Evaluating method {method} on dataset split {dataset}" + "\033[0m")
-            main(method, dataset)
+            main(method, dataset, recompute_results)
