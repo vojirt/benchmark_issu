@@ -22,8 +22,6 @@ def method_result_loader_PixOOD(method_name, dset_name, fid, results_root_dir):
     return SimpleNamespace(anomaly_scores = results["anomaly_scores"], 
                            pred_id_labels = results["pred_id_labels"]) 
 
-
-
 def simple_dbg(method_name, dset_name, fid, results_root_dir):
     # EXAMPLE: 'fid': 'validation_1'
     # load corresponding saved results
@@ -40,13 +38,8 @@ def simple_dbg(method_name, dset_name, fid, results_root_dir):
     return SimpleNamespace(anomaly_scores = score,
                            pred_id_labels = preds)
 
-def main():
-    method_name = "PixOOD_cs_RO"
-    # dataset_name = 'IDDObstacleTrack-static'
-    # dataset_name = 'IDDAnomalyTrack-static'
-    # dataset_name = 'IDDAnomalyTrack-all'
-    dataset_name = 'IDDAnomalyFullTrack-static'
 
+def main(method_name, dataset_name):
     ev = Evaluation(
         method_name = method_name, 
         dataset_name = dataset_name,
@@ -85,4 +78,12 @@ def main():
     )
 
 if __name__ == '__main__':
-    main()
+
+    # method_names = ["PixOOD_cs_RA", "PixOOD_cs_RO", "PixOOD_IDD_RO", "PixOOD_IDD_RA"]
+    method_names = ["PixOOD_IDD_RA"]
+    dataset_names = ['IDDAnomalyTrack-static', 'IDDAnomalyTrack-temporal', 'IDDObstacleTrack-static',  'IDDObstacleTrack-temporal']
+
+    for method in method_names:
+        for dataset in dataset_names:
+            print("\033[104m" + f"Evaluating method {method} on dataset split {dataset}" + "\033[0m")
+            main(method, dataset)
