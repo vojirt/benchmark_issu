@@ -81,10 +81,9 @@ class MetricPixelRecognition(EvaluationMetric):
 		"""
 		try:
 			mask_roi_open_set = label_pixel_gt < 255
-			mask_roi_closed_set = label_pixel_gt < 254
+			mask_roi_closed_set = label_pixel_gt < self.cfg.num_classes
 		except TypeError:
 			raise RuntimeError(f"No ground truth available for {fid}. Please check dataset path...")
-
 		closed_set_confusion_matrix = compute_confusion_matrix(
 			class_p, label_pixel_gt, mask_roi_closed_set, self.cfg.num_classes)
 

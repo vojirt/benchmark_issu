@@ -43,8 +43,9 @@ def simple_dbg(method_name, dset_name, fid, results_root_dir):
 def main():
     method_name = "PixOOD_cs_RO"
     # dataset_name = 'IDDObstacleTrack-static'
-    dataset_name = 'IDDAnomalyTrack-static'
+    # dataset_name = 'IDDAnomalyTrack-static'
     # dataset_name = 'IDDAnomalyTrack-all'
+    dataset_name = 'IDDAnomalyFullTrack-static'
 
     ev = Evaluation(
         method_name = method_name, 
@@ -62,7 +63,7 @@ def main():
     # wait for the background threads which are saving
     ev.wait_to_finish_saving()
 
-    print("Calculating pixel-level metrics")
+    print("Calculating pixel-level open-set metrics")
     ev.calculate_metric_from_saved_outputs(
         'IntersectionOverUnion',
         frame_vis=False,
