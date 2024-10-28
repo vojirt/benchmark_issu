@@ -1,5 +1,10 @@
 # default ouput directory of the benchmark
-outputs/
+outputs*/
+_results/
+
+#ignore stored datasets
+dataset_IDDTrack/
+dataset_ObstacleTrack/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

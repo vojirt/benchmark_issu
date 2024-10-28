@@ -88,7 +88,7 @@ class DatasetIDDFullAnomalyTrack(DatasetIDDFull):
         dir_root = DIR_DATASETS / 'dataset_IDDTrack',
         img_fmt = 'png',
         classes = CLASS_IDS,
-        name_for_persistence = 'IDDAnomalyTrack-all',
+        name_for_persistence = 'IDDAnomalyFullTrack-all',
     )
 
     SCENES_ALL = {
