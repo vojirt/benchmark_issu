@@ -53,16 +53,16 @@ def main():
         dataset_name = dataset_name,
     )
 
-    # for frame in tqdm(ev.get_frames()):
-    #     # run method here
-    #     # result = method_dummy(frame.image)
-    #     # result = method_result_loader_PixOOD(method_name, dataset_name, frame.fid, results_root_dir="./_results")
-    #     result = simple_dbg(method_name, dataset_name, frame.fid, results_root_dir="/mnt/sdb1/mgrcic/experiments/dbg_eam_results")
-    #     # provide the output for saving
-    #     ev.save_output(frame, result)
-    #
-    # # wait for the background threads which are saving
-    # ev.wait_to_finish_saving()
+    for frame in tqdm(ev.get_frames()):
+        # run method here
+        # result = method_dummy(frame.image)
+        # result = method_result_loader_PixOOD(method_name, dataset_name, frame.fid, results_root_dir="./_results")
+        result = simple_dbg(method_name, dataset_name, frame.fid, results_root_dir="/mnt/sdb1/mgrcic/experiments/dbg_eam_results")
+        # provide the output for saving
+        ev.save_output(frame, result)
+
+    # wait for the background threads which are saving
+    ev.wait_to_finish_saving()
 
     print("Calculating pixel-level open-set metrics")
     ev.calculate_metric_from_saved_outputs(
