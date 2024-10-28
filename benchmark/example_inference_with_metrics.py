@@ -73,9 +73,9 @@ if __name__ == '__main__':
     load_functions = {'EAM': result_loader_EAM}
     # NOTE: Regular track (without 'Full' in name) needts to be computed first to estimate threholds for the 'Full' evals open-miou metric
     dataset_names = ['IDDAnomalyTrack-static', 'IDDAnomalyFullTrack-static']
-
+    recompute_results = True
     for method in method_names:
         for dataset in dataset_names:
             print("\033[104m" + f"Evaluating method {method} on dataset split {dataset}" + "\033[0m")
-            recompute_results = 'Full' not in dataset
             main(method, dataset, load_functions[method], recompute_results)
+
