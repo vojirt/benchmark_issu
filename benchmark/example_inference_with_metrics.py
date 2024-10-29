@@ -4,9 +4,8 @@ from tqdm import tqdm
 import cv2 as cv
 from evaluation import Evaluation
 from types import SimpleNamespace
+import torch
 
-import ipdb
-import traceback
 
 def method_dummy(image, **_):
     """ Very naive method: return color saturation """
@@ -24,24 +23,20 @@ def method_result_loader_PixOOD(method_name, dset_name, fid, results_root_dir):
     return SimpleNamespace(anomaly_scores = results["anomaly_scores"], 
                            pred_id_labels = results["pred_id_labels"]) 
 
-def simple_dbg(method_name, dset_name, fid, results_root_dir):
-    # EXAMPLE: 'fid': 'validation_1'
-    # load corresponding saved results
-    result_file = os.path.join(results_root_dir, fid + ".png")
-    if not os.path.isfile(result_file):
-        raise FileNotFoundError(f"File not found: {result_file}")
-    from PIL import Image
-    img = Image.open(result_file)
-    pred = np.array(img)
-    H,W = pred.shape
-    score = np.random.rand(H,W)
-    preds = np.uint8(np.random.randint(0, 19, (H,W)))
-    # results = np.load(result_file)
+def result_loader_EAM(method_name, dset_name, fid, results_root_dir):
+    out = fid.split('_')[1:]
+    img = out[-1]
+    dir = "_".join(out[:-1])
+    name = f"{dir}++{img}_gtFine_csT.pth"
+    path = f'{results_root_dir}/{name}'
+    d = torch.load(path)
+    score = d['ood_score'].numpy()
+    preds = d['semseg'].numpy()
     return SimpleNamespace(anomaly_scores = score,
                            pred_id_labels = preds)
 
 
-def main(method_name, dataset_name, recompute_results=True):
+def main(method_name, dataset_name, load_fn, recompute_results=True):
     ev = Evaluation(
         method_name = method_name, 
         dataset_name = dataset_name,
@@ -49,14 +44,9 @@ def main(method_name, dataset_name, recompute_results=True):
     
     if recompute_results:
         for frame in tqdm(ev.get_frames()):
-            # run method here
-            # result = method_dummy(frame.image)
-            result = method_result_loader_PixOOD(method_name, dataset_name, frame.fid, results_root_dir="./_results")
-            # result = simple_dbg(method_name, dataset_name, frame.fid, results_root_dir="datasets/dataset_IDDTrack/labels_masks")
+            result = load_fn(method_name, dataset_name, frame.fid, results_root_dir="/mnt/sdb1/mgrcic/experiments/dbg_eam_results")
             # provide the output for saving
             ev.save_output(frame, result)
-
-        # wait for the background threads which are saving
         ev.wait_to_finish_saving()
 
     if "Full" in dataset_name:
@@ -70,21 +60,22 @@ def main(method_name, dataset_name, recompute_results=True):
         print("Calculating pixel-level metrics")
         ev.calculate_metric_from_saved_outputs(
             'PixBinaryClass',
-            frame_vis=True,
+            frame_vis=False,
         )
         print("Calculating instance-level metrics")
         ev.calculate_metric_from_saved_outputs(
             'SegEval-ObstacleTrack',
-            frame_vis=True,
+            frame_vis=False,
         )
 
 if __name__ == '__main__':
-    method_names = ["PixOOD_IDD_RA"]
+    method_names = ["EAM"]
+    load_functions = {'EAM': result_loader_EAM}
     # NOTE: Regular track (without 'Full' in name) needts to be computed first to estimate threholds for the 'Full' evals open-miou metric
     dataset_names = ['IDDAnomalyTrack-static', 'IDDAnomalyFullTrack-static']
     recompute_results = True
-
     for method in method_names:
         for dataset in dataset_names:
             print("\033[104m" + f"Evaluating method {method} on dataset split {dataset}" + "\033[0m")
-            main(method, dataset, recompute_results)
+            main(method, dataset, load_functions[method], recompute_results)
+

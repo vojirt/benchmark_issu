@@ -3,11 +3,11 @@ from typing import List
 from pathlib import Path
 from pandas import DataFrame, Series
 import numpy as np
-from matplotlib import pyplot
 from easydict import EasyDict
-
+import torch
+from torchmetrics.functional.classification import multiclass_confusion_matrix
 from metrics.base import EvaluationMetric, MetricRegistry, save_figure, save_table
-from metrics.pixel_classification_curves import BinaryClassificationCurve, curves_from_cmats, plot_classification_curves, reduce_curve_resolution
+
 
 from paths import DIR_OUTPUTS
 from datasets.utils import adapt_img_data, get_heat, imwrite
@@ -17,23 +17,21 @@ from metrics.base import save_table
 
 
 def confusion_matrix(predicted : np.ndarray, target : np.ndarray, num_classes : int):
-    x = predicted + num_classes * target
-    bincount_2d = np.bincount(
-        x.astype(np.int64), minlength=num_classes ** 2)
-    assert bincount_2d.size == num_classes ** 2
-    conf_mat = bincount_2d.reshape((num_classes, num_classes))
-    return conf_mat
+	cm = multiclass_confusion_matrix(predicted, target, num_classes=num_classes)
+	return cm
+
 
 def compute_confusion_matrix(pred, actual, mask, num_classes):
-    pred_in_roi = pred[mask]
-    actual_in_roi = actual[mask]
+	pred_in_roi = torch.tensor(pred[mask])
+	actual_in_roi = torch.tensor(actual[mask])
 
-    closed_set_cm = confusion_matrix(
-        predicted=pred_in_roi,
-        target=actual_in_roi,
-        num_classes=num_classes,
-    )
-    return closed_set_cm
+	cm = confusion_matrix(
+		predicted=pred_in_roi,
+		target=actual_in_roi,
+		num_classes=num_classes,
+	)
+	return cm
+
 
 @MetricRegistry.register_class()
 class MetricPixelRecognition(EvaluationMetric):
@@ -87,8 +85,10 @@ class MetricPixelRecognition(EvaluationMetric):
             mask_roi_closed_set = label_pixel_gt < self.cfg.num_classes
         except TypeError:
             raise RuntimeError(f"No ground truth available for {fid}. Please check dataset path...")
+
         closed_set_confusion_matrix = compute_confusion_matrix(
-            class_p, label_pixel_gt, mask_roi_closed_set, self.cfg.num_classes)
+            class_p, label_pixel_gt, mask_roi_closed_set, self.cfg.num_classes
+        )
 
         class_p[anomaly_p > self.cfg.threshold] = self.cfg.num_classes
         open_set_confusion_matrix = compute_confusion_matrix(
@@ -110,20 +110,20 @@ class MetricPixelRecognition(EvaluationMetric):
     def aggregate(self, frame_results : list, method_name : str, dataset_name : str):
         closed_set_cmats = [result.closed_set for result in frame_results]
         closed_set_cmat = sum(closed_set_cmats)
-        closed_set_ious = np.diag(closed_set_cmat) / (np.sum(closed_set_cmat, axis=0) + np.sum(closed_set_cmat, axis=1) - np.diag(closed_set_cmat))
-        miou = np.nansum(closed_set_ious) / self.cfg.num_classes
+        closed_set_ious = torch.diag(closed_set_cmat) / (closed_set_cmat.sum(dim=0) + closed_set_cmat.sum(dim=1) - torch.diag(closed_set_cmat))
+        miou = torch.nansum(closed_set_ious) / self.cfg.num_classes
 
         open_set_cmats = [result.open_set for result in frame_results]
         open_set_cmat = sum(open_set_cmats)
-        open_set_ious = np.diag(open_set_cmat) / (np.sum(open_set_cmat, axis=0) + np.sum(open_set_cmat, axis=1) - np.diag(open_set_cmat))
-        
+        open_set_ious = torch.diag(open_set_cmat) / (open_set_cmat.sum(0) + open_set_cmat.sum(1) - torch.diag(open_set_cmat))
+
         open_miou = np.nansum(open_set_ious[:-1]) / self.cfg.num_classes
 
         out = EasyDict(
             closed_set_ious = closed_set_ious,
             open_set_ious = open_set_ious[:-1],
-            closed_miou = miou,
-            open_miou = open_miou,
+            closed_miou = miou.item(),
+            open_miou = open_miou.item(),
             method_name = method_name,
             dataset_name = dataset_name,
         )
