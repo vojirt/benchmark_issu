@@ -1,0 +1,15 @@
+easydict
+h5py
+ipython
+joblib
+matplotlib
+numpy
+opencv_contrib_python
+opencv_python
+opencv_python_headless
+pandas
+Pillow
+scipy
+torch
+torchmetrics
+tqdm
