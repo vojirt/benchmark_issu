@@ -6,8 +6,9 @@ import numpy as np
 from easydict import EasyDict
 from scipy.ndimage.measurements import label
 from pathlib import Path
+from pandas import DataFrame, Series
 
-from metrics.base import EvaluationMetric, MetricRegistry
+from metrics.base import EvaluationMetric, MetricRegistry, save_table
 from paths import DIR_OUTPUTS
 from datasets.dataset_io import hdf5_write_hierarchy_to_file, hdf5_read_hierarchy_from_file
 from datasets.utils import adapt_img_data, imwrite, imread, image_montage_same_shape
@@ -344,9 +345,21 @@ class MetricSegment(EvaluationMetric):
     def persistence_path_data(self, method_name, dataset_name):
         return DIR_OUTPUTS / self.name / 'data' / f'{self.name}Results_{method_name}_{dataset_name}.hdf5'
 
+    def persistence_path_plot(self, comparison_name, plot_name):
+        return DIR_OUTPUTS / self.name / 'plot' / f'{comparison_name}__{plot_name}'
+
     def save(self, aggregated_result, method_name: str, dataset_name: str, path_override: Path = None):
         out_path = path_override or self.persistence_path_data(method_name, dataset_name)
         aggregated_result.save(out_path)
+
+
+    def plot_many(self, aggregated_result, comparison_name, close = True, method_names={}, plot_formats={}):
+        table = DataFrame(data=[
+            Series({k:getattr(crv, k) for k in self.fields_for_table()}, name=crv.method_name)
+            for crv in aggregated_result
+        ])
+        print(table)
+        save_table(self.persistence_path_plot(comparison_name, 'SegEvalTable'), table)
 
     def load(self, method_name: str, dataset_name: str, path_override: Path = None):
         out_path = path_override or self.persistence_path_data(method_name, dataset_name)
