@@ -30,6 +30,8 @@ class BinaryClassificationCurve:
 	tpr95_fpr : float = -1
 	tpr95_threshold : float = -1
 
+	fpr5_threshold : float = -1
+
 	IOU_at_05: float = float('nan')
 	PDR_at_05: float = float('nan')
 
@@ -130,6 +132,12 @@ def curves_from_cmats(cmats, thresholds, debug_thresholds=False):
 		fpr_tpr95 = 1.0
 		tpr95_threshold = 0.0
 
+	fpr5_index = np.searchsorted(fp_rates, 0.05)
+	if fpr5_index < fp_rates.shape[0]:
+		fpr5_threshold = float(thresholds[fpr5_index])
+	else:
+		fpr5_threshold = 0.0
+
 	recall50_index = np.searchsorted(recalls, 0.50)
 	recall50_threshold = float(thresholds[recall50_index])
 
@@ -175,6 +183,7 @@ def curves_from_cmats(cmats, thresholds, debug_thresholds=False):
 
 		tpr95_fpr = fpr_tpr95,
 		tpr95_threshold = tpr95_threshold,
+		fpr5_threshold = fpr5_threshold,
 
 		recall50_threshold = recall50_threshold,
 		best_f1_threshold = best_f1_threshold,

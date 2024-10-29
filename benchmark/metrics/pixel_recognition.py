@@ -40,6 +40,7 @@ class MetricPixelRecognition(EvaluationMetric):
         EasyDict(
             name = 'IntersectionOverUnion',
             num_classes = 19,
+            threshold_types = ["tpr95", "fpr05", "best_f1"] + [f"{int(100*i)}" for i in np.linspace(0.1, 0.9, num=9)] + ["99"],
             threshold = None, # should be set
         ),
     ]
@@ -90,16 +91,18 @@ class MetricPixelRecognition(EvaluationMetric):
             class_p, label_pixel_gt, mask_roi_closed_set, self.cfg.num_classes
         )
 
-        class_p[anomaly_p > self.cfg.threshold] = self.cfg.num_classes
-        open_set_confusion_matrix = compute_confusion_matrix(
-            class_p, label_pixel_gt, mask_roi_open_set, self.cfg.num_classes + 1)
-
         # visualization
         if visualize and fid is not None and dset_name is not None and method_name is not None:
             self.vis_frame(fid=fid, dset_name=dset_name, method_name=method_name, mask_roi=mask_roi_open_set,
                            anomaly_p=anomaly_p, label_pixel_gt=label_pixel_gt, **_)
-
         #print('Vrange', np.min(predictions_in_roi), np.mean(predictions_in_roi), np.max(predictions_in_roi))
+
+        open_set_confusion_matrix = {}
+        for i in range(0, len(self.cfg.threshold)):
+            class_p_thr = class_p.copy()
+            class_p_thr[anomaly_p > self.cfg.threshold[i]] = self.cfg.num_classes
+            open_set_confusion_matrix[self.cfg.threshold_types[i]] = compute_confusion_matrix(
+                class_p_thr, label_pixel_gt, mask_roi_open_set, self.cfg.num_classes + 1)
 
         return EasyDict(
             closed_set = closed_set_confusion_matrix,
@@ -113,17 +116,19 @@ class MetricPixelRecognition(EvaluationMetric):
         closed_set_ious = torch.diag(closed_set_cmat) / (closed_set_cmat.sum(dim=0) + closed_set_cmat.sum(dim=1) - torch.diag(closed_set_cmat))
         miou = torch.nansum(closed_set_ious) / self.cfg.num_classes
 
-        open_set_cmats = [result.open_set for result in frame_results]
-        open_set_cmat = sum(open_set_cmats)
-        open_set_ious = torch.diag(open_set_cmat) / (open_set_cmat.sum(0) + open_set_cmat.sum(1) - torch.diag(open_set_cmat))
+        open_miou = {}
+        for i in range(0, len(self.cfg.threshold)):
+            open_set_cmats = [result.open_set[self.cfg.threshold_types[i]] for result in frame_results]
+            open_set_cmat = sum(open_set_cmats)
+            open_set_ious = torch.diag(open_set_cmat) / (open_set_cmat.sum(0) + open_set_cmat.sum(1) - torch.diag(open_set_cmat))
 
-        open_miou = np.nansum(open_set_ious[:-1]) / self.cfg.num_classes
+            open_miou[self.cfg.threshold_types[i]] = (np.nansum(open_set_ious[:-1]) / self.cfg.num_classes).item()
 
         out = EasyDict(
             closed_set_ious = closed_set_ious,
             open_set_ious = open_set_ious[:-1],
             closed_miou = miou.item(),
-            open_miou = open_miou.item(),
+            open_miou = open_miou,
             method_name = method_name,
             dataset_name = dataset_name,
         )
@@ -147,7 +152,7 @@ class MetricPixelRecognition(EvaluationMetric):
 
     def plot_many(self, aggregated_results : List, comparison_name : str, close : bool = True, method_names={}, plot_formats={}):
         table = DataFrame(data=[
-            Series({'open_miou': crv.open_miou, 'closed_miou': crv.closed_miou }, name=crv.method_name)
+            Series({**{f"open_miou@{k}": v for k, v in crv.open_miou.items()}, 'closed_miou': crv.closed_miou}, name=crv.method_name)
             for crv in aggregated_results
         ])
         print(table)
@@ -164,6 +169,6 @@ class MetricPixelRecognition(EvaluationMetric):
 
         out_path = DIR_OUTPUTS / "PixBinaryClass" / 'data' / f'PixClassCurve_{method_name}_{dataset_name}.hdf5'
         pixel_results = hdf5_read_hierarchy_from_file(out_path)
-        self.cfg.threshold = pixel_results.tpr95_threshold
-        return self.cfg.threshold
+        self.cfg.threshold = [pixel_results.tpr95_threshold, pixel_results.fpr5_threshold, pixel_results.best_f1_threshold] + np.linspace(0.1, 0.9, num=9).tolist() + [0.99]
 
+        return self.cfg.threshold

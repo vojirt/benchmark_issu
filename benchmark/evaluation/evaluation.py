@@ -2,8 +2,7 @@
 from pathlib import Path
 from os import environ
 from functools import partial
-import multiprocessing
-from concurrent.futures import ThreadPoolExecutor
+from joblib import Parallel, delayed 
 import logging
 
 import numpy as np
@@ -44,9 +43,7 @@ class Evaluation:
     def __init__(self, method_name, dataset_name, threaded_saver=True, num_workers=8):
         self.method_name = method_name
         self.dataset_name = dataset_name
-
-        if threaded_saver:
-            self.threads = ThreadPoolExecutor(num_workers)
+        self.num_workers = num_workers
 
     def get_dataset(self):
         return DatasetRegistry.get(self.dataset_name)
@@ -101,9 +98,9 @@ class Evaluation:
                     metric.get_thresh_p_from_curve(self.method_name, self.dataset_name)
             if "Int" in metric_name:
                 metric.cfg.default_instancer = default_instancer
-                if metric.cfg.treshold is None and default_instancer:
+                if metric.cfg.threshold is None and default_instancer:
                     thr = metric.get_thresh_p_from_curve(self.method_name, self.dataset_name)
-                    print(f"Using threshold {thr} for metric {metric_name} for method {self.method_name} on dataset {self.dataset_name}")
+                    print(f"Using {metric.cfg.threshold_types} thresholds = {thr} for metric {metric_name} for method {self.method_name} on dataset {self.dataset_name}")
         except AttributeError:
             print("Perform 'PixBinaryClass' first")
             exit()
@@ -272,7 +269,7 @@ class Evaluation:
                 metric.cfg.default_instancer = default_instancer
                 if metric.cfg.threshold is None and default_instancer:
                     thr = metric.get_thresh_p_from_curve(self.method_name, self.dataset_name)
-                    print(f"Using threshold {thr} for metric {metric_name} for method {self.method_name} on dataset {self.dataset_name}")
+                    print(f"Using {metric.cfg.threshold_types} thresholds = {thr} for metric {metric_name} for method {self.method_name} on dataset {self.dataset_name}")
         except AttributeError:
             print("Perform 'PixBinaryClass' first")
             exit()
@@ -283,19 +280,10 @@ class Evaluation:
             dset_name = self.dataset_name
             frame_indices = range(self.get_dataset().__len__())
 
-        tasks = [
-            (dset_name, idx)
-            for idx in frame_indices
-        ]
-
-        with multiprocessing.Pool() as pool:
-            it = pool.imap_unordered(
-                partial(self.metric_worker, self.method_name, metric_name, frame_vis, default_instancer, load_closed_set_preds=load_closed_set_preds, threshold=threshold),
-                tasks,
-                chunksize = 4,
-            )
-            
-            processed_frames = list(tqdm(it, total=tasks.__len__()))
+        processed_frames = Parallel(n_jobs=self.num_workers)(
+                delayed(self.metric_worker)(self.method_name, metric_name, frame_vis, default_instancer, (dset_name, idx), load_closed_set_preds=load_closed_set_preds, threshold=threshold)
+                for idx in tqdm(frame_indices)
+        ) 
 
         frame_vis_only = frame_vis == 'only'
         if not frame_vis_only:
