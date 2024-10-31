@@ -40,7 +40,7 @@ class Evaluation:
 
     threads = None
 
-    def __init__(self, method_name, dataset_name, threaded_saver=True, num_workers=8):
+    def __init__(self, method_name, dataset_name, num_workers=8):
         self.method_name = method_name
         self.dataset_name = dataset_name
         self.num_workers = num_workers
@@ -318,13 +318,4 @@ class Evaluation:
             metric.plot_single(ag, close = not show_plot)
 
             return ag
-
-
-    def wait_to_finish_saving(self):
-        if self.threads is not None:
-            self.threads.shutdown(True)
-            self.threads = None
-
-
-
 
