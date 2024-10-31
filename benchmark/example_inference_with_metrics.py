@@ -80,13 +80,46 @@ def main(method_name, dataset_name, load_fn, results_root_dir, recompute_results
         )
 
 if __name__ == '__main__':
-    method_names = ["EAM"]
-    load_functions = {'EAM': result_loader_EAM}
+    num_workers = 16
+    recompute_results = False
+
+    # method_names = ["EAM"]
+    method_names = ["PixOOD_IDD_RA", "PixOOD_cs_RA", "DaCUP_cs", "DaCUP_IDD", "JSRNet_cs", "JSRNet_IDD" ]
+    # method_names = ["PixOOD_IDD_RA", "PixOOD_cs_RA"]
+
+    load_functions = {
+        "EAM": result_loader_EAM, 
+        "PixOOD_IDD_RA": result_loader_PixOOD,
+        "PixOOD_cs_RA": result_loader_PixOOD,
+        "PixOOD_IDD_RO": result_loader_PixOOD,
+        "PixOOD_cs_RO": result_loader_PixOOD,
+        "DaCUP_cs": result_loader_PixOOD,
+        "DaCUP_IDD": result_loader_PixOOD,
+        "JSRNet_cs": result_loader_PixOOD,
+        "JSRNet_IDD": result_loader_PixOOD,
+    }
+
+    results_root_dirs = {
+            "EAM": "/mnt/sdb1/mgrcic/experiments/dbg_eam_results",
+            "PixOOD_IDD_RA": "./_results/",
+            "PixOOD_cs_RA": "./_results/",
+            "PixOOD_IDD_RO": "./_results/",
+            "PixOOD_cs_RO": "./_results/",
+            "DaCUP_cs": "./_results/",
+            "DaCUP_IDD": "./_results/",
+            "JSRNet_cs": "./_results/",
+            "JSRNet_IDD": "./_results/",
+    }
+
     # NOTE: Regular track (without 'Full' in name) needts to be computed first to estimate threholds for the 'Full' evals open-miou metric
-    dataset_names = ['IDDAnomalyTrack-static', 'IDDAnomalyFullTrack-static']
-    recompute_results = True
+
+    # dataset_names = ["IDDObstacleTrack-static", "IDDObstacleTrack-temporal"]
+    # dataset_names += ["IDDAnomalyTrack-static", "IDDAnomalyFullTrack-static"]
+    # dataset_names += ["IDDAnomalyTrack-temporal", "IDDAnomalyFullTrack-temporal"]
+    # dataset_names = ["IDDAnomalyTrack-static", "IDDAnomalyTrack-temporal"]
+    dataset_names = ["IDDAnomalyFullTrack-temporal", "IDDAnomalyFullTrack-static"]
+
     for method in method_names:
         for dataset in dataset_names:
             print("\033[104m" + f"Evaluating method {method} on dataset split {dataset}" + "\033[0m")
-            main(method, dataset, load_functions[method], recompute_results)
-
+            main(method, dataset, load_functions[method], results_root_dirs[method], recompute_results, num_workers)
