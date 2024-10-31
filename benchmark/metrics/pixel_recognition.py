@@ -1,5 +1,6 @@
+import dataclasses
+from typing import List, Dict
 
-from typing import List
 from pathlib import Path
 from pandas import DataFrame, Series
 import numpy as np
@@ -31,6 +32,28 @@ def compute_confusion_matrix(pred, actual, mask, num_classes):
 		num_classes=num_classes,
 	)
 	return cm
+
+
+@dataclasses.dataclass
+class RecResultsInfo:
+    method_name : str
+    dataset_name : str
+
+    threshold_types : np.ndarray 
+    threshold : np.ndarray 
+    open_miou : Dict
+    closed_miou : float 
+
+    def __iter__(self):
+        return dataclasses.asdict(self).items()
+
+    def save(self, path):
+        hdf5_write_hierarchy_to_file(path, dataclasses.asdict(self))
+
+    @classmethod
+    def from_file(cls, path):
+        return cls(**hdf5_read_hierarchy_from_file(path))
+
 
 
 @MetricRegistry.register_class()
@@ -142,7 +165,13 @@ class MetricPixelRecognition(EvaluationMetric):
 
     def save(self, aggregated_result, method_name : str, dataset_name : str, path_override : Path = None):
         out_path = path_override or self.persistence_path_data(method_name, dataset_name)
-        pass
+        RecResultsInfo(method_name = method_name,
+                       dataset_name = dataset_name,
+                       threshold_types = np.array(self.cfg.threshold_types, dtype='S'),
+                       threshold = np.array(self.cfg.threshold),
+                       open_miou = aggregated_result.open_miou,
+                       closed_miou = aggregated_result.closed_miou
+                       ).save(out_path)
 
     def load(self, method_name : str, dataset_name : str, path_override : Path = None):
         pass
