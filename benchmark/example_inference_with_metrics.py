@@ -5,6 +5,7 @@ import cv2 as cv
 from evaluation import Evaluation
 from types import SimpleNamespace
 import torch
+from joblib import Parallel, delayed 
 
 
 def method_dummy(image, **_):
@@ -13,7 +14,7 @@ def method_dummy(image, **_):
     anomaly_p = image_hsv[:, :, 1].astype(np.float32) * (1./255.)
     return anomaly_p
 
-def method_result_loader_PixOOD(method_name, dset_name, fid, results_root_dir):
+def result_loader_PixOOD(method_name, dset_name, fid, results_root_dir):
     # load corresponding saved results
     result_file = os.path.join(results_root_dir, method_name, fid + ".npz")
     if not os.path.isfile(result_file):
@@ -36,18 +37,28 @@ def result_loader_EAM(method_name, dset_name, fid, results_root_dir):
                            pred_id_labels = preds)
 
 
-def main(method_name, dataset_name, load_fn, recompute_results=True):
+def main(method_name, dataset_name, load_fn, results_root_dir, recompute_results, num_workers):
     ev = Evaluation(
         method_name = method_name, 
         dataset_name = dataset_name,
+        num_workers=num_workers,
     )
     
     if recompute_results:
-        for frame in tqdm(ev.get_frames()):
-            result = load_fn(method_name, dataset_name, frame.fid, results_root_dir="/mnt/sdb1/mgrcic/experiments/dbg_eam_results")
-            # provide the output for saving
-            ev.save_output(frame, result)
-        ev.wait_to_finish_saving()
+        print("Computing results ...")
+        if "result_loader" in load_fn.__name__:
+            print("Detected results loader function, processing will be parallel")
+            def process_frame(frame):
+                result = load_fn(method_name, dataset_name, frame.fid, results_root_dir)
+                ev.save_output(frame, result)
+            Parallel(n_jobs=num_workers)(delayed(process_frame)(frame) for frame in tqdm(ev.get_frames())) 
+        else:
+            for frame in tqdm(ev.get_frames()):
+                result = load_fn(method_name, dataset_name, frame.fid, results_root_dir)
+                # provide the output for saving
+                ev.save_output(frame, result)
+    else:
+        print("Skipping results computation.")
 
     if "Full" in dataset_name:
         ev.calculate_metric_from_saved_outputs(
