@@ -54,7 +54,7 @@ def default_instancer(anomaly_p: np.ndarray, label_pixel_gt: np.ndarray, thresh_
     mask_roi = label_pixel_gt < 255
     segmentation_filtered = np.copy(anomaly_seg_pred).astype("uint8")
     segmentation_filtered[anomaly_seg_pred>0] = 1
-    segmentation_filtered[mask_roi==255] = 0
+    segmentation_filtered[label_pixel_gt==255] = 0
 
     return anomaly_instances[mask_roi], anomaly_seg_pred[mask_roi], segmentation_filtered
 
