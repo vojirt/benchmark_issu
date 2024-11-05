@@ -62,10 +62,13 @@ def curves_from_cmats(cmats, thresholds, debug_thresholds=False):
     # Thanks to Jan Ackermann from ETHZ for reporting problems with the AP curves.
 
     thr_unique_indices = np.concatenate([
-        [0],
         np.nonzero(thresholds[:-1] != thresholds[1:])[0],
         [cmats.__len__()-1],
     ])  
+    if thr_unique_indices[0] != 0:
+        thr_unique_indices = np.concatenate([[0], thr_unique_indices])  
+    assert thr_unique_indices[0] == 0, "First unique index to threshold should be pointing to 0 element"
+    assert thr_unique_indices[-1] == len(thresholds)-1, "Last unique index to threshold should be pointing to last element"
     # print(f'Reducing sample numbers from {len(thresholds)} thresholds and {len(cmats)} cmats to {len(thr_unique_indices)}')
 
     # Ignore the entries for repeated thresholds.
