@@ -135,14 +135,14 @@ class MetricPixelClassification(EvaluationMetric):
 
     configs = [
         EasyDict(
-            name = 'PixBinaryClass-uniThr',
+            name = 'PixBinaryClass',
             # pixel scores in a given image are quantized into bins, 
             # so that big datasets can be stored in memory and processed in parallel
             num_bins = 4096,
             bin_strategy = 'uniform',
         ),
         EasyDict(
-            name = 'PixBinaryClass',
+            name = 'PixBinaryClass-perThr',
             num_bins = 768,
             bin_strategy = 'percentiles',
         )
