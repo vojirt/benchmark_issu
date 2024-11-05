@@ -78,6 +78,11 @@ def binary_confusion_matrix(
     #   - false positives - above threshold
     #   - true negatives - below threshold
     fp_rel, bin_edges = np.histogram(prob_at_false, bins=bins, range=histogram_range)
+    # NOTE: the bin_edges from the histogram fnc are rounded or not full precision for case where the range is specified, 
+    # internally probably use correct values, the histogram_bin_edges fnc return unclipped 
+    # values (this is clear when you increase number of bins)
+    bin_edges = np.histogram_bin_edges([0, 1], bins=bins, range=histogram_range)
+
     # the curve goes from higher thresholds to lower thresholds
     bin_edges = bin_edges[::-1]
     fp_rel = fp_rel[::-1]
