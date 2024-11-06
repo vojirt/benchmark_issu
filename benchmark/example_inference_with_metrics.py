@@ -99,7 +99,7 @@ def main(method_name, dataset_name, load_fn, results_root_dir, recompute_results
 
 if __name__ == '__main__':
     num_workers = 16
-    recompute_results = False
+    recompute_results = True
 
     # method_names = ["EAM_FT"]
     method_names = ["PixOOD_IDD_RA"]
@@ -136,6 +136,8 @@ if __name__ == '__main__':
 
     dataset_names = ["IDDObstacleTrack-static", "IDDObstacleTrack-temporal"]
     dataset_names += ["IDDAnomalyTrack-static", "IDDAnomalyTrack-temporal"]
+    dataset_names += ["IDDAnomalyTrack-staticNormal", "IDDAnomalyTrack-staticLowLight"]
+    dataset_names += ["IDDAnomalyTrack-temporalNormal", "IDDAnomalyTrack-temporalLowLight"]
 
     for method in method_names:
         for dataset in dataset_names:

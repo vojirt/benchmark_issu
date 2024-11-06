@@ -9,37 +9,36 @@ from datasets.dataset_io import hdf5_write_hierarchy_to_file, hdf5_read_hierarch
 experiments_info = {
         "IntersectionOverUnion" : {
             "file_fmt" : "OpenSet_{method_name}_{dataset_name}.hdf5",
-            "valid_datasets": ["IDDAnomalyTrack-static", "IDDAnomalyTrack-temporal"],
+            "valid_datasets": ["IDDAnomalyTrack"],
         },
         "PixBinaryClass": {
             "file_fmt" : "PixClassCurve_{method_name}_{dataset_name}.hdf5",
-            "valid_datasets": ["IDDObstacleTrack-static", "IDDObstacleTrack-temporal", "IDDAnomalyTrack-static", "IDDAnomalyTrack-temporal"],
+            "valid_datasets": ["IDDObstacleTrack", "IDDAnomalyTrack"],
         },
         "SegEval": {
             "file_fmt" : "SegEvalResults_{method_name}_{dataset_name}.hdf5",
-            "valid_datasets": ["IDDObstacleTrack-static", "IDDObstacleTrack-temporal", "IDDAnomalyTrack-static", "IDDAnomalyTrack-temporal"],
+            "valid_datasets": ["IDDObstacleTrack", "IDDAnomalyTrack"],
         },
         "SegEval-TooSmall": {
             "file_fmt" : "SegEval-TooSmallResults_{method_name}_{dataset_name}.hdf5",
-            "valid_datasets": ["IDDObstacleTrack-static", "IDDObstacleTrack-temporal", "IDDAnomalyTrack-static", "IDDAnomalyTrack-temporal"],
+            "valid_datasets": ["IDDObstacleTrack", "IDDAnomalyTrack"],
         },
         "SegEval-Small": {
             "file_fmt" : "SegEval-SmallResults_{method_name}_{dataset_name}.hdf5",
-            "valid_datasets": ["IDDObstacleTrack-static", "IDDObstacleTrack-temporal", "IDDAnomalyTrack-static", "IDDAnomalyTrack-temporal"],
+            "valid_datasets": ["IDDObstacleTrack", "IDDAnomalyTrack"],
         },
         "SegEval-Large": {
             "file_fmt" : "SegEval-LargeResults_{method_name}_{dataset_name}.hdf5",
-            "valid_datasets": ["IDDObstacleTrack-static", "IDDObstacleTrack-temporal", "IDDAnomalyTrack-static", "IDDAnomalyTrack-temporal"],
+            "valid_datasets": ["IDDObstacleTrack", "IDDAnomalyTrack"],
         },
         "SegEval-VeryLarge": {
             "file_fmt" : "SegEval-VeryLargeResults_{method_name}_{dataset_name}.hdf5",
-            "valid_datasets": ["IDDObstacleTrack-static", "IDDObstacleTrack-temporal", "IDDAnomalyTrack-static", "IDDAnomalyTrack-temporal"],
+            "valid_datasets": ["IDDObstacleTrack", "IDDAnomalyTrack"],
         },
 }
 
 def get_results_for_exp(exp, method_name, dataset_name, result_dir="./outputs/"):
-    filename = os.path.join(result_dir, exp, "data", 
-                            experiments_info[exp]["file_fmt"].format(method_name=method_name, dataset_name=dataset_name))
+    filename = os.path.join(result_dir, exp, "data", experiments_info[exp]["file_fmt"].format(method_name=method_name, dataset_name=dataset_name))
     res_dict = {}
     if os.path.isfile(filename):
         tmp_data = hdf5_read_hierarchy_from_file(filename)
@@ -68,7 +67,24 @@ if __name__ == "__main__":
     result_root_dir = "./outputs/"
     experiments = ["PixBinaryClass", "SegEval", "SegEval-TooSmall", "SegEval-Small", "SegEval-Large", "SegEval-VeryLarge", "IntersectionOverUnion"]
 
-    dataset_names = ["IDDObstacleTrack-static", "IDDObstacleTrack-temporal", "IDDAnomalyTrack-static", "IDDAnomalyTrack-temporal"]
+    dataset_names = [
+            "IDDObstacleTrack-static", 
+            "IDDObstacleTrack-staticNormal", 
+            "IDDObstacleTrack-staticLowLight",
+
+            "IDDObstacleTrack-temporal",
+            "IDDObstacleTrack-temporalNormal",
+            "IDDObstacleTrack-temporalLowLight",
+
+            "IDDAnomalyTrack-static",
+            "IDDAnomalyTrack-staticNormal",
+            "IDDAnomalyTrack-staticLowLight",
+
+            "IDDAnomalyTrack-temporal",
+            "IDDAnomalyTrack-temporalNormal",
+            "IDDAnomalyTrack-temporalLowLight"
+    ]
+
     method_names = ["PixOOD_IDD_RA"] 
 
     tables = {} 
@@ -77,7 +93,7 @@ if __name__ == "__main__":
         for method_name in method_names:
             res_dict = {}
             for exp in experiments:
-                if dataset_name not in experiments_info[exp]["valid_datasets"]:
+                if dataset_name.split('-')[0] not in experiments_info[exp]["valid_datasets"]:
                     continue
 
                 res_dict.update(get_results_for_exp(exp, method_name, dataset_name))

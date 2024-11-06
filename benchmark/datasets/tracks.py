@@ -14,6 +14,44 @@ from datasets.dataset_io import DatasetBase, ChannelLoaderImage
 
 log = logging.getLogger(__name__)
 
+STATIC_NORMAL = ["0", "1", "100", "101", "102", "104", "108", "11", "110",
+                 "116", "121", "122", "125", "126", "127", "130", "131",
+                 "141", "145", "146", "151", "152", "154", "155", "158",
+                 "160", "162", "163", "167", "17", "171", "172", "173",
+                 "174", "175", "176", "177", "178", "18", "181", "2", "20",
+                 "204", "21", "211", "213", "214", "223", "23", "230",
+                 "235", "236", "237", "24", "240", "242", "243", "245",
+                 "246", "25", "252", "262", "263", "267", "272", "273",
+                 "275", "276", "277", "28", "280", "282", "283", "284",
+                 "285", "29", "294", "295", "3", "30", "308", "31", "311",
+                 "314", "316", "317", "318", "319", "320", "322", "338",
+                 "34", "340", "347", "350", "353", "355", "356", "357",
+                 "359", "36", "360", "361", "37", "372", "375", "377",
+                 "379", "38", "380", "385", "387", "388", "40", "400",
+                 "403", "41", "412", "414", "416", "417", "42", "420",
+                 "421", "422", "43", "431", "432", "436", "439", "44",
+                 "441", "446", "45", "452", "453", "457", "459", "46",
+                 "460", "467", "470", "472", "476", "48", "483", "486",
+                 "489", "49", "490", "493", "495", "497", "498", "5",
+                 "501", "502", "503", "508", "51", "512", "516", "518",
+                 "52", "53", "532", "540", "541", "544", "548", "550",
+                 "554", "56", "57", "578", "59", "60", "62", "63", "65",
+                 "68", "69", "70", "77", "78", "80", "81", "84", "85",
+                 "86", "87", "89", "91", "93", "94", "96", "98"]
+STATIC_LOWLIGHT = ["rain", "fog", "lowlight"]
+TEMPORAL_NORMAL = ["0", "1", "10", "100", "101", "102", "11", "12", "13",
+   "14", "16", "18", "19", "2", "21", "22", "23", "24", "26", "27", "28",
+                   "29", "3", "30", "34", "35", "36", "37", "4", "43",
+                   "44", "46", "47", "48", "49", "50", "51", "53", "55",
+                   "56", "57", "58", "59", "6", "60", "61", "62", "63",
+                   "64", "65", "66", "67", "68", "69", "7", "70", "71",
+                   "73", "74", "75", "76", "77", "78", "79", "8", "81",
+                   "82", "84", "86", "87", "89", "9", "90", "92", "95",
+                   "97", "98", "99"]
+TEMPORAL_LOWLIGHT = ["25", "17", "45", "91", "41", "40", "33", "38", "52",
+                     "39", "72", "93", "94", "31", "54", "15", "96", "88",
+                     "85", "32", "20", "5", "42", "80", "83"]
+
 class DatasetIDD(DatasetBase):
     def __init__(self, cfg):
         super().__init__(cfg)
@@ -78,7 +116,7 @@ class DatasetIDD(DatasetBase):
         """ Filter frames by requested scenes """
         frames_filtered = [
             fr for fr in frame_list
-            if fr.fid.split('_')[0] in self.cfg.scenes
+            if (fr.fid.split('_')[0] in self.cfg.scenes) and (fr.fid.split('_')[1] not in self.cfg.exclude)
         ]
         super().set_frames(frames_filtered)
 
@@ -100,7 +138,11 @@ class DatasetIDDAnomalyTrack(DatasetIDD):
 
     SCENES_ALL = {
         'static',
+        'staticNormal',
+        'staticLowLight',
         'temporal',
+        'temporalNormal',
+        'temporalLowLight',
     }
 
     configs = [
@@ -109,6 +151,7 @@ class DatasetIDDAnomalyTrack(DatasetIDD):
             name = 'IDDAnomalyTrack-all',
             scenes = SCENES_ALL,
             expected_length = 980+1138,
+            exclude = [], 
             **DEFAULTS,
         ),
         dict(
@@ -116,6 +159,23 @@ class DatasetIDDAnomalyTrack(DatasetIDD):
             name = 'IDDAnomalyTrack-static',
             scenes = {'static'},
             expected_length = 980,
+            exclude = [], 
+            **DEFAULTS,
+        ),
+        dict(
+            # static - Normal (nice) images only
+            name = 'IDDAnomalyTrack-staticNormal',
+            scenes = {'static'},
+            expected_length = 980-132,
+            exclude = STATIC_LOWLIGHT, 
+            **DEFAULTS,
+        ),
+        dict(
+            # static - LowLight (rain, fog, ...)
+            name = 'IDDAnomalyTrack-staticLowLight',
+            scenes = {'static'},
+            expected_length = 132,
+            exclude = STATIC_NORMAL,
             **DEFAULTS,
         ),
         dict(
@@ -123,8 +183,25 @@ class DatasetIDDAnomalyTrack(DatasetIDD):
             name = 'IDDAnomalyTrack-temporal',
             scenes ={'temporal'},
             expected_length = 1138,
+            exclude = [],
             **DEFAULTS,
         ),
+        dict(
+            # temporal - Normal
+            name = 'IDDAnomalyTrack-temporalNormal',
+            scenes ={'temporal'},
+            expected_length = 1138 - 270,
+            exclude = TEMPORAL_LOWLIGHT,
+            **DEFAULTS,
+        ),
+        dict(
+            # temporal - LowLight
+            name = 'IDDAnomalyTrack-temporalLowLight',
+            scenes ={'temporal'},
+            expected_length = 270, 
+            exclude = TEMPORAL_NORMAL,
+            **DEFAULTS,
+        )
     ]
 
     channels = {
@@ -150,7 +227,11 @@ class DatasetIDDObstacleTrack(DatasetIDD):
 
     SCENES_ALL = {
         'static',
+        'staticNormal',
+        'staticLowLight',
         'temporal',
+        'temporalNormal',
+        'temporalLowLight',
     }
 
     configs = [
@@ -159,6 +240,7 @@ class DatasetIDDObstacleTrack(DatasetIDD):
             name = 'IDDObstacleTrack-all',
             scenes = SCENES_ALL,
             expected_length = 980+1138,
+            exclude = [], 
             **DEFAULTS,
         ),
         dict(
@@ -166,6 +248,23 @@ class DatasetIDDObstacleTrack(DatasetIDD):
             name = 'IDDObstacleTrack-static',
             scenes = {'static'},
             expected_length = 980,
+            exclude = [], 
+            **DEFAULTS,
+        ),
+        dict(
+            # static - Normal (nice) images only
+            name = 'IDDObstacleTrack-staticNormal',
+            scenes = {'static'},
+            expected_length = 980-132,
+            exclude = STATIC_LOWLIGHT, 
+            **DEFAULTS,
+        ),
+        dict(
+            # static - LowLight (rain, fog, ...)
+            name = 'IDDObstacleTrack-staticLowLight',
+            scenes = {'static'},
+            expected_length = 132,
+            exclude = STATIC_NORMAL, 
             **DEFAULTS,
         ),
         dict(
@@ -173,8 +272,25 @@ class DatasetIDDObstacleTrack(DatasetIDD):
             name = 'IDDObstacleTrack-temporal',
             scenes ={'temporal'},
             expected_length = 1138,
+            exclude = [],
             **DEFAULTS,
         ),
+        dict(
+            # temporal - Normal
+            name = 'IDDObstacleTrack-temporalNormal',
+            scenes ={'temporal'},
+            expected_length = 1138 - 270,
+            exclude = TEMPORAL_LOWLIGHT, 
+            **DEFAULTS,
+        ),
+        dict(
+            # temporal - LowLight
+            name = 'IDDObstacleTrack-temporalLowLight',
+            scenes ={'temporal'},
+            expected_length = 270, 
+            exclude = TEMPORAL_NORMAL,
+            **DEFAULTS,
+        )
     ]
 
     channels = {
