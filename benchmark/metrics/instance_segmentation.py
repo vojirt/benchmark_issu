@@ -163,22 +163,18 @@ class MetricSegment(EvaluationMetric):
             name='SegEval',
             thresh_p=None,
             thresh_sIoU=np.linspace(0.25, 0.75, 11, endpoint=True),
-            thresh_segsize=500,
-            thresh_instsize=100,
-        ),
-        EasyDict(
-            name='SegEval-AnomalyTrack',
-            thresh_p=None,
-            thresh_sIoU=np.linspace(0.25, 0.75, 11, endpoint=True),
-            thresh_segsize=500,
-            thresh_instsize=100,
-        ),
-        EasyDict(
-            name='SegEval-ObstacleTrack',
-            thresh_p=None,
-            thresh_sIoU=np.linspace(0.25, 0.75, 11, endpoint=True),
+            # NOTE: this was used as default for AnomalyTrack in SMIYC benchmark
             thresh_segsize=50,
             thresh_instsize=10,
+        ),
+        EasyDict(
+            name='SegEval-Large',
+            thresh_p=None,
+            thresh_sIoU=np.linspace(0.25, 0.75, 11, endpoint=True),
+            # NOTE: 16x is most common downsampling of most backbone architectures
+            #       -> define size as multiples of that
+            thresh_segsize=4*16*16,   
+            thresh_instsize=4*16*16,
         )
     ]
 
