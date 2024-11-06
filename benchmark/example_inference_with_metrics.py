@@ -25,12 +25,17 @@ def result_loader_PixOOD(method_name, dset_name, fid, results_root_dir):
                            pred_id_labels = results["pred_id_labels"]) 
 
 def result_loader_EAM(method_name, dset_name, fid, results_root_dir):
+    if 'temporal' in dset_name:
+        rd = f"{results_root_dir}_temp"
+    else:
+        rd = f"{results_root_dir}"
+    # print(fid)
     out = fid.split('_')[1:]
     img = out[-1]
     dir = "_".join(out[:-1])
     name = f"{dir}++{img}_gtFine_csT.pth"
-    path = f'{results_root_dir}/{name}'
-    d = torch.load(path)
+    path = f'{rd}/{name}'
+    d = torch.load(path, weights_only=False)
     score = d['ood_score'].numpy()
     preds = d['semseg'].numpy()
     return SimpleNamespace(anomaly_scores = score,
@@ -88,7 +93,10 @@ if __name__ == '__main__':
     # method_names = ["PixOOD_IDD_RA", "PixOOD_cs_RA"]
 
     load_functions = {
-        "EAM": result_loader_EAM, 
+        "EAM_FT": result_loader_EAM,
+        "EAM": result_loader_EAM,
+        "EAM_FT_OOD": result_loader_EAM,
+        "EAM_OOD": result_loader_EAM,
         "PixOOD_IDD_RA": result_loader_PixOOD,
         "PixOOD_cs_RA": result_loader_PixOOD,
         "PixOOD_IDD_RO": result_loader_PixOOD,
@@ -100,7 +108,10 @@ if __name__ == '__main__':
     }
 
     results_root_dirs = {
+            "EAM_FT": "/mnt/sdb1/mgrcic/experiments/dbg_eam_ft_results",
             "EAM": "/mnt/sdb1/mgrcic/experiments/dbg_eam_results",
+            "EAM_FT_OOD": "/mnt/sdb1/mgrcic/experiments/ood_eam_results_ft",
+            "EAM_OOD": "/mnt/sdb1/mgrcic/experiments/ood_eam_results",
             "PixOOD_IDD_RA": "./_results/",
             "PixOOD_cs_RA": "./_results/",
             "PixOOD_IDD_RO": "./_results/",
