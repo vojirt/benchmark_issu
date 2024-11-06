@@ -6,6 +6,9 @@ from evaluation import Evaluation
 from types import SimpleNamespace
 import torch
 from joblib import Parallel, delayed 
+from pandas import DataFrame, Series
+
+from datasets.dataset_io import hdf5_write_hierarchy_to_file, hdf5_read_hierarchy_from_file
 
 
 def method_dummy(image, **_):
@@ -38,6 +41,25 @@ def result_loader_EAM(method_name, dset_name, fid, results_root_dir):
 
 
 def main(method_name, dataset_name, load_fn, results_root_dir, recompute_results, num_workers):
+    experiments_info = {
+            "IntersectionOverUnion" : {
+                "file_fmt" : "OpenSet_{method_name}_{dataset_name}.hdf5",
+                "valid_datasets": ["IDDAnomalyTrack-static", "IDDAnomalyTrack-temporal"],
+            },
+            "PixBinaryClass": {
+                "file_fmt" : "PixClassCurve_{method_name}_{dataset_name}.hdf5",
+                "valid_datasets": ["IDDObstacleTrack-static", "IDDObstacleTrack-temporal", "IDDAnomalyTrack-static", "IDDAnomalyTrack-temporal"],
+            },
+            "SegEval": {
+                "file_fmt" : "SegEvalResults_{method_name}_{dataset_name}.hdf5",
+                "valid_datasets": ["IDDObstacleTrack-static", "IDDObstacleTrack-temporal", "IDDAnomalyTrack-static", "IDDAnomalyTrack-temporal"],
+            },
+            "SegEval-Large": {
+                "file_fmt" : "SegEval-LargeResults_{method_name}_{dataset_name}.hdf5",
+                "valid_datasets": ["IDDObstacleTrack-static", "IDDObstacleTrack-temporal", "IDDAnomalyTrack-static", "IDDAnomalyTrack-temporal"],
+            },
+    }
+
     ev = Evaluation(
         method_name = method_name, 
         dataset_name = dataset_name,
@@ -60,32 +82,54 @@ def main(method_name, dataset_name, load_fn, results_root_dir, recompute_results
     else:
         print("Skipping results computation.")
 
-    if "Full" in dataset_name:
+    res_dict = {}
+    exps = ["PixBinaryClass", "SegEval", "SegEval-Large"]
+    for exp in exps:
+        print(f"Calculating {exp} metrics")
         ev.calculate_metric_from_saved_outputs(
-            'IntersectionOverUnion',
+            exp,
+            frame_vis=False,
+        )
+        # for table plot
+        filename = os.path.join("./outputs/", exp, "data", 
+                                experiments_info[exp]["file_fmt"].format(method_name=method_name, dataset_name=dataset_name))
+        res_data = hdf5_read_hierarchy_from_file(filename)
+        if exp == "PixBinaryClass":
+            res_dict["AP"] = 100*res_data.area_PRC 
+            res_dict["FPR@95TPR"] = 100*res_data.tpr95_fpr 
+        elif exp == "SegEval":
+            res_dict["mF1(all)"] = 100*res_data.f1_mean 
+        elif exp == "SegEval-Large":
+            res_dict["mF1(Large)"] = 100*res_data.f1_mean 
+
+    if "Anomaly" in dataset_name:
+        exp = "IntersectionOverUnion"
+        print(f"Calculating {exp} metrics")
+        ev.calculate_metric_from_saved_outputs(
+            exp,
             frame_vis=False,
             parallel=True,
             load_closed_set_preds=True,
         )
-    else:
-        print("Calculating pixel-level metrics")
-        ev.calculate_metric_from_saved_outputs(
-            'PixBinaryClass',
-            frame_vis=False,
-        )
-        print("Calculating instance-level metrics")
-        ev.calculate_metric_from_saved_outputs(
-            'SegEval-ObstacleTrack',
-            frame_vis=False,
-        )
+        filename = os.path.join("./outputs/", exp, "data", 
+                                experiments_info[exp]["file_fmt"].format(method_name=method_name, dataset_name=dataset_name))
+        res_data = hdf5_read_hierarchy_from_file(filename)
+        res_dict["closed-mIoU"] = 100*res_data.closed_miou 
+        res_dict["open-mIoU@best_f1"] = 100*res_data.open_miou["best_f1"]
+        res_dict["open-mIoU@tpr95"] = 100*res_data.open_miou["tpr95"]
+        res_dict["open-mIoU@fpr05"] = 100*res_data.open_miou["fpr05"]
+
+    table = DataFrame(data=[Series(res_dict, name=method_name)])
+    print(f"\n===== {dataset_name} =====")
+    print(table.to_markdown(floatfmt=".2f"))
+    print("\n")
+
 
 if __name__ == '__main__':
     num_workers = 16
     recompute_results = False
 
-    # method_names = ["EAM"]
-    method_names = ["PixOOD_IDD_RA", "PixOOD_cs_RA", "DaCUP_cs", "DaCUP_IDD", "JSRNet_cs", "JSRNet_IDD" ]
-    # method_names = ["PixOOD_IDD_RA", "PixOOD_cs_RA"]
+    method_names = ["PixOOD_IDD_RA"]
 
     load_functions = {
         "EAM": result_loader_EAM, 
@@ -111,13 +155,8 @@ if __name__ == '__main__':
             "JSRNet_IDD": "./_results/",
     }
 
-    # NOTE: Regular track (without 'Full' in name) needts to be computed first to estimate threholds for the 'Full' evals open-miou metric
-
-    # dataset_names = ["IDDObstacleTrack-static", "IDDObstacleTrack-temporal"]
-    # dataset_names += ["IDDAnomalyTrack-static", "IDDAnomalyFullTrack-static"]
-    # dataset_names += ["IDDAnomalyTrack-temporal", "IDDAnomalyFullTrack-temporal"]
-    # dataset_names = ["IDDAnomalyTrack-static", "IDDAnomalyTrack-temporal"]
-    dataset_names = ["IDDAnomalyFullTrack-temporal", "IDDAnomalyFullTrack-static"]
+    dataset_names = ["IDDObstacleTrack-static", "IDDObstacleTrack-temporal"]
+    dataset_names += ["IDDAnomalyTrack-static", "IDDAnomalyTrack-temporal"]
 
     for method in method_names:
         for dataset in dataset_names:
