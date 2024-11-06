@@ -17,21 +17,11 @@ from datasets.utils import adapt_img_data, imwrite, imread, image_montage_same_s
 from metrics.base import save_table
 
 
-def confusion_matrix(predicted : np.ndarray, target : np.ndarray, num_classes : int):
-	cm = multiclass_confusion_matrix(predicted, target, num_classes=num_classes)
-	return cm
-
-
 def compute_confusion_matrix(pred, actual, mask, num_classes):
-	pred_in_roi = torch.tensor(pred[mask])
-	actual_in_roi = torch.tensor(actual[mask])
-
-	cm = confusion_matrix(
-		predicted=pred_in_roi,
-		target=actual_in_roi,
-		num_classes=num_classes,
-	)
-	return cm
+    pred_in_roi = torch.tensor(pred[mask])
+    actual_in_roi = torch.tensor(actual[mask])
+    cm = multiclass_confusion_matrix(pred_in_roi, actual_in_roi, num_classes=num_classes)
+    return cm
 
 
 @dataclasses.dataclass
@@ -55,7 +45,6 @@ class RecResultsInfo:
         return cls(**hdf5_read_hierarchy_from_file(path))
 
 
-
 @MetricRegistry.register_class()
 class MetricPixelRecognition(EvaluationMetric):
 
@@ -64,7 +53,7 @@ class MetricPixelRecognition(EvaluationMetric):
             name = 'IntersectionOverUnion',
             num_classes = 19,
             threshold_types = ["tpr95", "fpr05", "best_f1"] + [f"{int(100*i)}" for i in np.linspace(0.1, 0.9, num=9)] + ["99"],
-            threshold = None, # should be set
+            threshold = None, # should be set dynamically
         ),
     ]
 
@@ -197,6 +186,7 @@ class MetricPixelRecognition(EvaluationMetric):
             dataset_name = "IDDObstacleTrack-" + _dataset_name.split('-')[-1]
 
         out_path = DIR_OUTPUTS / "PixBinaryClass" / 'data' / f'PixClassCurve_{method_name}_{dataset_name}.hdf5'
+        assert not os.path.isfile(out_path), f"To load dynamically thresholds for the open-set evaluation, run evaluation on {dataset_name} first!"
         pixel_results = hdf5_read_hierarchy_from_file(out_path)
         self.cfg.threshold = [pixel_results.tpr95_threshold, pixel_results.fpr5_threshold, pixel_results.best_f1_threshold] + np.linspace(0.1, 0.9, num=9).tolist() + [0.99]
 

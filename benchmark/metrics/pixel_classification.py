@@ -32,36 +32,7 @@ def binary_confusion_matrix(
         histogram_range = [-0.01, 1.01]
 
     elif bin_strategy == 'percentiles':
-        # dynamic bins representing the range of occurring values
-        # bin edges are following the distribution of positive and negative pixels
-
-        # choose thresholds to surround the range of values
-        vmin = np.min(prob)
-        vmax = np.max(prob)
-        vrange = vmax-vmin
-        eps = np.maximum(vrange*1e-2, 1e-2) # make sure there is some separation between the thresholds
-
-        bins = [
-            [vmin - eps, vmax + eps]
-        ]
-
-        if prob_at_true.size:
-            bins += [
-                np.quantile(prob_at_true, np.linspace(0, 1, min(num_bins//2, prob_at_true.size))),
-            ]
-        if prob_at_false.size:
-            bins += [
-                np.quantile(prob_at_false, np.linspace(0, 1, min(num_bins//2, prob_at_false.size))),
-            ]
-
-            
-        bins = np.concatenate(bins)
-        
-        # sort and remove duplicates, duplicated cause an exception in np.histogram
-        bins = np.unique(bins)
-        
-
-        histogram_range = None
+        raise NotImplementedError("Percentiles threshold selection not implemented! It is troublesome, use uniform threshold sampling like normal people :)")
 
     # the area of positive pixels is divided into
     #   - true positives - above threshold
@@ -79,8 +50,8 @@ def binary_confusion_matrix(
     #   - true negatives - below threshold
     fp_rel, bin_edges = np.histogram(prob_at_false, bins=bins, range=histogram_range)
     # NOTE: the bin_edges from the histogram fnc are rounded or not full precision for case where the range is specified, 
-    # internally probably use correct values, the histogram_bin_edges fnc return unclipped 
-    # values (this is clear when you increase number of bins)
+    # internally I hope is uses correct values, the histogram_bin_edges fnc return unclipped 
+    # values (this is clear when you increase number of bins). Not sure if related to any specific version of numpy.
     bin_edges = np.histogram_bin_edges([0, 1], bins=bins, range=histogram_range)
 
     # the curve goes from higher thresholds to lower thresholds
@@ -96,25 +67,17 @@ def binary_confusion_matrix(
         [fn, tn],
     ]).transpose(2, 0, 1).astype(dtype)
 
-    # cmat_rel = np.array([
-    #   [tp_rel, fp_rel],
-    #   [-tp_rel, -fp_rel],
-    # ]).transpose(2, 0, 1).astype(dtype)
-    
     if normalize:
         cmat_sum *= (1./area)
-        # cmat_rel *= (1./area)
 
     return EasyDict(
         bin_edges = bin_edges,
         cmat_sum = cmat_sum,
-        # cmat_rel = cmat_rel,
         tp_rel = tp_rel,
         fp_rel = fp_rel,
         num_pos = gt_area_true,
         num_neg = gt_area_false,
     )
-
 
 def test_binary_confusion_matrix():
     pp = np.array([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9])
@@ -128,8 +91,6 @@ def test_binary_confusion_matrix():
     pyplot.plot(cmat[:, 0, 1] / cmat_all_n, cmat[:, 0, 0] / cmat_all_p)
 
 
-
-
 @MetricRegistry.register_class()
 class MetricPixelClassification(EvaluationMetric):
 
@@ -140,11 +101,6 @@ class MetricPixelClassification(EvaluationMetric):
             # so that big datasets can be stored in memory and processed in parallel
             num_bins = 4096,
             bin_strategy = 'uniform',
-        ),
-        EasyDict(
-            name = 'PixBinaryClass-perThr',
-            num_bins = 768,
-            bin_strategy = 'percentiles',
         )
     ]
 
@@ -202,8 +158,6 @@ class MetricPixelClassification(EvaluationMetric):
             self.vis_frame(fid=fid, dset_name=dset_name, method_name=method_name, mask_roi=mask_roi,
                            anomaly_p=anomaly_p, label_pixel_gt=label_pixel_gt, **_)
 
-        #print('Vrange', np.min(predictions_in_roi), np.mean(predictions_in_roi), np.max(predictions_in_roi))
-
         return bc
 
 
@@ -222,45 +176,13 @@ class MetricPixelClassification(EvaluationMetric):
             thresholds = thresholds,
         )
 
-    @staticmethod
-    def aggregate_dynamic_bins(frame_results):
-
-        thresholds = np.concatenate([r.bin_edges[1:] for r in frame_results])
-
-        tp_relative = np.concatenate([r.tp_rel for r in frame_results], axis=0)
-        fp_relative = np.concatenate([r.fp_rel for r in frame_results], axis=0)
-
-        num_positives = sum(r.num_pos for r in frame_results)
-        num_negatives = sum(r.num_neg for r in frame_results)
-
-
-        threshold_order = np.argsort(thresholds)[::-1]
-
-        # We start at threshold = 1, and lower it
-        # Initially, prediction=0, all GT=1 pixels are false-negatives, and all GT=0 pixels are true-negatives.
-
-        tp_cumu = np.cumsum(tp_relative[threshold_order].astype(np.float64))
-        fp_cumu = np.cumsum(fp_relative[threshold_order].astype(np.float64))
-
-        cmats = np.array([
-            # tp, fp
-            [tp_cumu, fp_cumu],
-            # fn, tn
-            [num_positives - tp_cumu, num_negatives - fp_cumu],
-        ]).transpose([2, 0, 1])
-
-        return EasyDict(
-            cmat = cmats,
-            thresholds = thresholds[threshold_order],
-        )
-
     def aggregate(self, frame_results : list, method_name : str, dataset_name : str):
         # fuse cmats FIXED BINS
 
         if self.cfg.bin_strategy == 'uniform':
             ag = self.aggregate_fixed_bins(frame_results)
         else:
-            ag = self.aggregate_dynamic_bins(frame_results)
+            raise NotImplementedError("Not Implemented!")
 
         thresholds = ag.thresholds
         cmats = ag.cmat
@@ -303,7 +225,6 @@ class MetricPixelClassification(EvaluationMetric):
         return ['area_PRC', 'tpr95_fpr', 'best_f1']
 
     def plot_many(self, aggregated_results : List, comparison_name : str, close : bool = True, method_names={}, plot_formats={}):
-
         cinfos = [
             reduce_curve_resolution(cinfo, num_pts=256)
             for cinfo in aggregated_results

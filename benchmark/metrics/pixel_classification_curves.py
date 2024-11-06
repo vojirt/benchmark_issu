@@ -14,7 +14,6 @@ from datasets.dataset_io import hdf5_write_hierarchy_to_file, hdf5_read_hierarch
 class BinaryClassificationCurve:
     method_name : str
     dataset_name : str
-#   display_name : str = ''
 
     area_PRC : float
     curve_recall : np.ndarray
@@ -51,30 +50,8 @@ class BinaryClassificationCurve:
 
 
 def curves_from_cmats(cmats, thresholds, debug_thresholds=False):
+    assert np.all(thresholds[:-1] != thresholds[1:]), f"CURVES_FROM_CMATS: Same threshold values detected! {thresholds}"
     
-    # The threshold goes from high to low
-    
-    # The thresholds are independent for each frame which can result in repeated thresholds.
-    # Here we collapse those segments of the curve that would be caused by repeated thresholds.
-    # We choose the indices where each threshold appears for the last time.
-    # This means that all the samples for this threshold have been accounted for. 
-
-    # Thanks to Jan Ackermann from ETHZ for reporting problems with the AP curves.
-
-    thr_unique_indices = np.concatenate([
-        np.nonzero(thresholds[:-1] != thresholds[1:])[0],
-        [cmats.__len__()-1],
-    ])  
-    if thr_unique_indices[0] != 0:
-        thr_unique_indices = np.concatenate([[0], thr_unique_indices])  
-    assert thr_unique_indices[0] == 0, "First unique index to threshold should be pointing to 0 element"
-    assert thr_unique_indices[-1] == len(thresholds)-1, "Last unique index to threshold should be pointing to last element"
-    # print(f'Reducing sample numbers from {len(thresholds)} thresholds and {len(cmats)} cmats to {len(thr_unique_indices)}')
-
-    # Ignore the entries for repeated thresholds.
-    cmats = cmats[thr_unique_indices]
-    thresholds = thresholds[thr_unique_indices]
-
     tp = cmats[:, 0, 0]
     fp = cmats[:, 0, 1]
     fn = cmats[:, 1, 0]
@@ -114,15 +91,6 @@ def curves_from_cmats(cmats, thresholds, debug_thresholds=False):
 
     recalls = tp / (tp+fn)
 
-    # if not ( precisions[0] == 1 and recalls[0] == 0 ):
-    #   precisions = np.concatenate([[1], precisions])
-    #   recalls = np.concatenate([[0], recalls])
-    # # and ends at recall = 1
-    # if not ( recalls[-1] == 1 ):
-    #   precisions = np.concatenate([precisions, [0]])
-    #   recalls = np.concatenate([recalls, [1]])
-
-
     f1_scores = (2 * tp) / (2 * tp + fp + fn)
 
     tpr95_index = np.searchsorted(tp_rates, 0.95)
@@ -156,8 +124,6 @@ def curves_from_cmats(cmats, thresholds, debug_thresholds=False):
         fig.legend()
         fig.savefig('debug_best_threshold.png')
 
-
-
     best_f1_threshold = float(thresholds[ix])
     best_f1 = f1_scores[ix]
 
@@ -190,9 +156,7 @@ def curves_from_cmats(cmats, thresholds, debug_thresholds=False):
         recall50_threshold = recall50_threshold,
         best_f1_threshold = best_f1_threshold,
         best_f1 = best_f1
-
     )
-
 
 def select_points_for_curve(x, y, num_points, value_range=(0, 1)):
     """
@@ -240,7 +204,6 @@ def select_points_for_curve(x, y, num_points, value_range=(0, 1)):
         curve_y = y[indices],
     )
 
-
 def reduce_curve_resolution(cinfo : BinaryClassificationCurve, num_pts : int = 128) -> BinaryClassificationCurve:
     """
     Reduces curve resolution for plotting
@@ -257,12 +220,6 @@ def reduce_curve_resolution(cinfo : BinaryClassificationCurve, num_pts : int = 1
 
     indices = prc['indices']
 
-    # roc = select_points_for_curve(
-    #   curve_info.curve_fpr, 
-    #   curve_info.curve_tpr, 
-    #   num_points = num_pts,
-    # )
-    
     return dataclasses.replace(
         cinfo,
         curve_recall = prc['curve_x'],
@@ -273,7 +230,6 @@ def reduce_curve_resolution(cinfo : BinaryClassificationCurve, num_pts : int = 1
         curve_tpr = cinfo.curve_tpr[indices],
         thresholds = cinfo.thresholds[indices],
     )
-
 
 def plot_classification_curves_draw_entry(plot_roc : pyplot.Axes, plot_prc : pyplot.Axes, curve_info : BinaryClassificationCurve, display_name : str, format=None):
 
@@ -325,7 +281,6 @@ def plot_classification_curves_draw_entry(plot_roc : pyplot.Axes, plot_prc : pyp
             # marker = '.',
             **fmt_args,
         )
-
 
 def plot_classification_curves(curve_infos : List[BinaryClassificationCurve], method_names : Dict[str, str] = {}, plot_formats = {}, plot_best = None):
     
@@ -392,6 +347,3 @@ def plot_classification_curves(curve_infos : List[BinaryClassificationCurve], me
         plot_figure = fig,
         score_table = table_scores,
     )
-
-
-
