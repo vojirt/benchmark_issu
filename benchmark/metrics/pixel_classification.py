@@ -234,7 +234,7 @@ class MetricPixelClassification(EvaluationMetric):
         fig = vis_res.plot_figure
         table = vis_res.score_table
 
-        print(table)
+        # print(table)
             
         save_figure(self.persistence_path_plot(comparison_name, 'PixClassCurves'), fig)
 

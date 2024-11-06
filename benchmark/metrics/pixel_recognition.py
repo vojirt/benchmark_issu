@@ -1,5 +1,6 @@
 import dataclasses
 from typing import List, Dict
+import os
 
 from pathlib import Path
 from pandas import DataFrame, Series
@@ -7,13 +8,13 @@ import numpy as np
 from easydict import EasyDict
 import torch
 from torchmetrics.functional.classification import multiclass_confusion_matrix
-from metrics.base import EvaluationMetric, MetricRegistry, save_figure, save_table
+from metrics.base import EvaluationMetric, MetricRegistry, save_table
 
 
 from paths import DIR_OUTPUTS
 from datasets.utils import adapt_img_data, get_heat, imwrite
 from datasets.dataset_io import hdf5_write_hierarchy_to_file, hdf5_read_hierarchy_from_file
-from datasets.utils import adapt_img_data, imwrite, imread, image_montage_same_shape
+from datasets.utils import adapt_img_data, imwrite
 from metrics.base import save_table
 
 
@@ -147,7 +148,7 @@ class MetricPixelRecognition(EvaluationMetric):
         return out
 
     def persistence_path_data(self, method_name, dataset_name):
-        return DIR_OUTPUTS / self.name / 'data' / f'PixClassCurve_{method_name}_{dataset_name}.hdf5'
+        return DIR_OUTPUTS / self.name / 'data' / f'OpenSet_{method_name}_{dataset_name}.hdf5'
 
     def persistence_path_plot(self, comparison_name, plot_name):
         return DIR_OUTPUTS / self.name / 'plot' / f'{comparison_name}__{plot_name}'
@@ -173,8 +174,8 @@ class MetricPixelRecognition(EvaluationMetric):
             Series({**{f"open_miou@{k}": v for k, v in crv.open_miou.items()}, 'closed_miou': crv.closed_miou}, name=crv.method_name)
             for crv in aggregated_results
         ])
-        print(table)
-        save_table(self.persistence_path_plot(comparison_name, 'PixClassTable'), table)
+        # print(table)
+        save_table(self.persistence_path_plot(comparison_name, 'OpensetTable'), table)
 
     def init(self, method_name, dataset_name):
         self.get_thresh_p_from_curve(method_name, dataset_name)
@@ -186,7 +187,7 @@ class MetricPixelRecognition(EvaluationMetric):
             dataset_name = "IDDObstacleTrack-" + _dataset_name.split('-')[-1]
 
         out_path = DIR_OUTPUTS / "PixBinaryClass" / 'data' / f'PixClassCurve_{method_name}_{dataset_name}.hdf5'
-        assert not os.path.isfile(out_path), f"To load dynamically thresholds for the open-set evaluation, run evaluation on {dataset_name} first!"
+        assert os.path.isfile(out_path), f"To load dynamically thresholds ({out_path}) for the open-set evaluation, run evaluation on {dataset_name} first!"
         pixel_results = hdf5_read_hierarchy_from_file(out_path)
         self.cfg.threshold = [pixel_results.tpr95_threshold, pixel_results.fpr5_threshold, pixel_results.best_f1_threshold] + np.linspace(0.1, 0.9, num=9).tolist() + [0.99]
 

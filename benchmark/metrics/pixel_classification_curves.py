@@ -127,10 +127,8 @@ def curves_from_cmats(cmats, thresholds, debug_thresholds=False):
     best_f1_threshold = float(thresholds[ix])
     best_f1 = f1_scores[ix]
 
-    print(
-        'ap-sum', np.sum(np.diff(recalls) * precisions[1:]),
-        'ap-trapz', np.trapz(precisions, recalls),
-    )
+    # print('ap-sum', np.sum(np.diff(recalls) * precisions[1:]),
+    #     'ap-trapz', np.trapz(precisions, recalls))
 
     # Change the sum strategy to match sklearn rather than 
     # taking the triangular area under the rising curve.
