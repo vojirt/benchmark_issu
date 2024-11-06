@@ -1,6 +1,4 @@
-
 import dataclasses
-
 import numpy as np
 
 from easydict import EasyDict
@@ -11,7 +9,7 @@ from pandas import DataFrame, Series
 from metrics.base import EvaluationMetric, MetricRegistry, save_table
 from paths import DIR_OUTPUTS
 from datasets.dataset_io import hdf5_write_hierarchy_to_file, hdf5_read_hierarchy_from_file
-from datasets.utils import adapt_img_data, imwrite, imread, image_montage_same_shape
+from datasets.utils import adapt_img_data, imwrite, image_montage_same_shape
 
 from matplotlib.pyplot import get_cmap
 
@@ -57,42 +55,6 @@ def default_instancer(anomaly_p: np.ndarray, label_pixel_gt: np.ndarray, thresh_
     segmentation_filtered[label_pixel_gt==255] = 0
 
     return anomaly_instances[mask_roi], anomaly_seg_pred[mask_roi], segmentation_filtered
-
-
-def anomaly_instances_from_mask(segmentation: np.ndarray, label_pixel_gt: np.ndarray, thresh_instsize: int = 0):
-    anomaly_gt = np.zeros(label_pixel_gt.shape)
-    anomaly_gt[label_pixel_gt == 1] = 1
-    anomaly_pred = np.zeros(label_pixel_gt.shape)
-    anomaly_pred[segmentation == 1] = 1
-    anomaly_pred[label_pixel_gt == 255] = 0
-
-    """connected components"""
-    structure = np.ones((3, 3), dtype=np.uint8)
-    anomaly_instances, n_anomaly = label(anomaly_gt, structure)
-    anomaly_seg_pred, n_seg_pred = label(anomaly_pred, structure)
-
-    """remove ground truth connected components below size threshold"""
-    labeled_mask = np.copy(anomaly_instances)
-    label_pixel_gt = label_pixel_gt.copy() # copy for editing
-    for comp in range(n_anomaly + 1):
-        if len(anomaly_instances[labeled_mask == comp]) < thresh_instsize:
-            label_pixel_gt[labeled_mask == comp] = 255
-
-    """restrict to region of interest"""
-    mask_roi = label_pixel_gt < 255
-    return anomaly_instances[mask_roi], anomaly_seg_pred[mask_roi]
-
-
-def save_anomaly_mask(anomaly_p: np.ndarray, thresh_p: float, save_path: str):
-
-    """segmentation from pixel-wise anomaly scores"""
-    segmentation = np.copy(anomaly_p)
-    segmentation[anomaly_p > thresh_p] = 1
-    segmentation[anomaly_p <= thresh_p] = 0
-
-    # Image.fromarray(segmentation.astype('uint8')).save(save_path)
-    imwrite(save_path, segmentation.astype('uint8'))
-    print("Saved:", save_path)
 
 
 def segment_metrics(anomaly_instances, anomaly_seg_pred, iou_thresholds=np.linspace(0.25, 0.75, 11, endpoint=True)):
@@ -201,22 +163,18 @@ class MetricSegment(EvaluationMetric):
             name='SegEval',
             thresh_p=None,
             thresh_sIoU=np.linspace(0.25, 0.75, 11, endpoint=True),
-            thresh_segsize=500,
-            thresh_instsize=100,
-        ),
-        EasyDict(
-            name='SegEval-AnomalyTrack',
-            thresh_p=None,
-            thresh_sIoU=np.linspace(0.25, 0.75, 11, endpoint=True),
-            thresh_segsize=500,
-            thresh_instsize=100,
-        ),
-        EasyDict(
-            name='SegEval-ObstacleTrack',
-            thresh_p=None,
-            thresh_sIoU=np.linspace(0.25, 0.75, 11, endpoint=True),
+            # NOTE: this was used as default for AnomalyTrack in SMIYC benchmark
             thresh_segsize=50,
             thresh_instsize=10,
+        ),
+        EasyDict(
+            name='SegEval-Large',
+            thresh_p=None,
+            thresh_sIoU=np.linspace(0.25, 0.75, 11, endpoint=True),
+            # NOTE: 16x is most common downsampling of most backbone architectures
+            #       -> define size as multiples of that
+            thresh_segsize=4*16*16,   
+            thresh_instsize=4*16*16,
         )
     ]
 
@@ -225,19 +183,7 @@ class MetricSegment(EvaluationMetric):
         return self.cfg.name
 
     def vis_frame(self, fid, dset_name, method_name, mask_roi, anomaly_p, image=None, **_):
-
-        # segmentation = np.copy(anomaly_p)
-        # segmentation[anomaly_p > self.cfg.thresh_p] = 1
-        # segmentation[anomaly_p <= self.cfg.thresh_p] = 0
-        # h, w = mask_roi.shape[:2]
-        # canvas = image.copy() if image is not None else np.zeros((h, w, 3), dtype=np.uint8)
-        # heatmap_color = adapt_img_data(segmentation)
-        # canvas[mask_roi] = canvas[mask_roi] // 2 + heatmap_color[mask_roi] // 2
-        
-        # imwrite(DIR_OUTPUTS / f'vis_SegPred' / method_name / dset_name / f'{fid}.webp', canvas)
-
         heatmap = adapt_img_data(anomaly_p, cmap_pos=CMAP)
-        # heatmap = adapt_img_data(-anomaly_p, cmap_pos=self.get_colormap())
                 
         fused_img = image.copy()
         fused_img[mask_roi] = heatmap[mask_roi]
@@ -263,8 +209,6 @@ class MetricSegment(EvaluationMetric):
 
         return demo_img
 
-
-
     def process_frame(self, label_pixel_gt: np.ndarray, anomaly_p: np.ndarray, class_p : np.ndarray, fid : str=None, dset_name : str=None,
                       method_name : str=None, visualize : bool = True, **_):
         """
@@ -281,10 +225,8 @@ class MetricSegment(EvaluationMetric):
         if self.cfg.get(default_instancer, True):
             anomaly_gt, anomaly_pred, mask = default_instancer(anomaly_p, label_pixel_gt, self.cfg.thresh_p,
                                                                self.cfg.thresh_segsize, self.cfg.thresh_instsize)
-            # imwrite(_["mask_path"], mask)
         else:
-            anomaly_mask = imread(_["mask_path"])
-            anomaly_gt, anomaly_pred = anomaly_instances_from_mask(anomaly_mask, label_pixel_gt, self.cfg.thresh_instsize)
+            raise RuntimeError("Currently only default_instancer=True is supported!")
 
         results = segment_metrics(anomaly_gt, anomaly_pred, self.cfg.thresh_sIoU)
 
@@ -302,9 +244,9 @@ class MetricSegment(EvaluationMetric):
         prec_pred_mean = sum(np.sum(r.prec_pred) for r in frame_results) / sum(len(r.prec_pred) for r in frame_results)
         ag_results = {"tp_mean" : 0., "fn_mean" : 0., "fp_mean" : 0., "f1_mean" : 0.,
                       "sIoU_gt" : sIoU_gt_mean, "sIoU_pred" : sIoU_pred_mean, "prec_pred": prec_pred_mean}
-        print("Mean sIoU GT   :", sIoU_gt_mean)
-        print("Mean sIoU PRED :", sIoU_pred_mean)
-        print("Mean Precision PRED :", prec_pred_mean)
+        # print("Mean sIoU GT   :", sIoU_gt_mean)
+        # print("Mean sIoU PRED :", sIoU_pred_mean)
+        # print("Mean Precision PRED :", prec_pred_mean)
         for t in self.cfg.thresh_sIoU:
             tp = sum(r["tp_" + str(int(t*100))] for r in frame_results)
             fn = sum(r["fn_" + str(int(t*100))] for r in frame_results)
@@ -315,11 +257,6 @@ class MetricSegment(EvaluationMetric):
                 ag_results["fn_" + str(int(t * 100))] = fn
                 ag_results["fp_" + str(int(t * 100))] = fp
                 ag_results["f1_" + str(int(t * 100))] = f1
-            # print("---sIoU thresh =", t)
-            # print("Number of TPs  :", tp)
-            # print("Number of FNs  :", fn)
-            # print("Number of FPs  :", fp)
-            # print("F1 score       :", f1)
             ag_results["tp_mean"] += tp
             ag_results["fn_mean"] += fn
             ag_results["fp_mean"] += fp
@@ -329,11 +266,11 @@ class MetricSegment(EvaluationMetric):
         ag_results["fn_mean"] /= len(self.cfg.thresh_sIoU)
         ag_results["fp_mean"] /= len(self.cfg.thresh_sIoU)
         ag_results["f1_mean"] /= len(self.cfg.thresh_sIoU)
-        print("---sIoU thresh averaged")
-        print("Number of TPs  :", ag_results["tp_mean"])
-        print("Number of FNs  :", ag_results["fn_mean"])
-        print("Number of FPs  :", ag_results["fp_mean"])
-        print("F1 score       :", ag_results["f1_mean"])
+        # print("---sIoU thresh averaged")
+        # print("Number of TPs  :", ag_results["tp_mean"])
+        # print("Number of FNs  :", ag_results["fn_mean"])
+        # print("Number of FPs  :", ag_results["fp_mean"])
+        # print("F1 score       :", ag_results["f1_mean"])
 
         seg_info = ResultsInfo(
             method_name=method_name,
@@ -352,13 +289,12 @@ class MetricSegment(EvaluationMetric):
         out_path = path_override or self.persistence_path_data(method_name, dataset_name)
         aggregated_result.save(out_path)
 
-
     def plot_many(self, aggregated_result, comparison_name, close = True, method_names={}, plot_formats={}):
         table = DataFrame(data=[
             Series({k:getattr(crv, k) for k in self.fields_for_table()}, name=crv.method_name)
             for crv in aggregated_result
         ])
-        print(table)
+        # print(table)
         save_table(self.persistence_path_plot(comparison_name, 'SegEvalTable'), table)
 
     def load(self, method_name: str, dataset_name: str, path_override: Path = None):

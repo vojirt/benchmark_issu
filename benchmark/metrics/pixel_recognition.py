@@ -1,5 +1,6 @@
 import dataclasses
 from typing import List, Dict
+import os
 
 from pathlib import Path
 from pandas import DataFrame, Series
@@ -7,31 +8,21 @@ import numpy as np
 from easydict import EasyDict
 import torch
 from torchmetrics.functional.classification import multiclass_confusion_matrix
-from metrics.base import EvaluationMetric, MetricRegistry, save_figure, save_table
+from metrics.base import EvaluationMetric, MetricRegistry, save_table
 
 
 from paths import DIR_OUTPUTS
 from datasets.utils import adapt_img_data, get_heat, imwrite
 from datasets.dataset_io import hdf5_write_hierarchy_to_file, hdf5_read_hierarchy_from_file
-from datasets.utils import adapt_img_data, imwrite, imread, image_montage_same_shape
+from datasets.utils import adapt_img_data, imwrite
 from metrics.base import save_table
 
 
-def confusion_matrix(predicted : np.ndarray, target : np.ndarray, num_classes : int):
-	cm = multiclass_confusion_matrix(predicted, target, num_classes=num_classes)
-	return cm
-
-
 def compute_confusion_matrix(pred, actual, mask, num_classes):
-	pred_in_roi = torch.tensor(pred[mask])
-	actual_in_roi = torch.tensor(actual[mask])
-
-	cm = confusion_matrix(
-		predicted=pred_in_roi,
-		target=actual_in_roi,
-		num_classes=num_classes,
-	)
-	return cm
+    pred_in_roi = torch.tensor(pred[mask])
+    actual_in_roi = torch.tensor(actual[mask])
+    cm = multiclass_confusion_matrix(pred_in_roi, actual_in_roi, num_classes=num_classes)
+    return cm
 
 
 @dataclasses.dataclass
@@ -55,7 +46,6 @@ class RecResultsInfo:
         return cls(**hdf5_read_hierarchy_from_file(path))
 
 
-
 @MetricRegistry.register_class()
 class MetricPixelRecognition(EvaluationMetric):
 
@@ -64,7 +54,7 @@ class MetricPixelRecognition(EvaluationMetric):
             name = 'IntersectionOverUnion',
             num_classes = 19,
             threshold_types = ["tpr95", "fpr05", "best_f1"] + [f"{int(100*i)}" for i in np.linspace(0.1, 0.9, num=9)] + ["99"],
-            threshold = None, # should be set
+            threshold = None, # should be set dynamically
         ),
     ]
 
@@ -80,22 +70,22 @@ class MetricPixelRecognition(EvaluationMetric):
         heatmap_color = adapt_img_data(anomaly_p)
         canvas[mask_roi] = canvas[mask_roi]//2 + heatmap_color[mask_roi]//2
         imwrite(
-            DIR_OUTPUTS / f'vis_PixelClassification' / method_name / dset_name / f'{fid}_demo_anomalyP.webp',
+            DIR_OUTPUTS / f'vis_OpensetClassification' / method_name / dset_name / f'{fid}_demo_anomalyP.webp',
             canvas,
         )
 
         anomaly_heat = get_heat(anomaly_p, overlay=label_pixel_gt)
         imwrite(
-            DIR_OUTPUTS / f'vis_PixelClassification' / method_name / dset_name / f'{fid}_demo_anomalyP_heat.webp',
+            DIR_OUTPUTS / f'vis_OpensetClassification' / method_name / dset_name / f'{fid}_demo_anomalyP_heat.webp',
             anomaly_heat,
         )
 
 
-    def process_frame(self, label_pixel_gt : np.ndarray, anomaly_p : np.ndarray, class_p : np.ndarray, fid : str=None, dset_name : str=None, method_name : str=None, visualize : bool = True, **_):
+    def process_frame(self, label_pixel_gt_kp1 : np.ndarray, anomaly_p : np.ndarray, class_p : np.ndarray, fid : str=None, dset_name : str=None, method_name : str=None, visualize : bool = True, **_):
         """
-        @param label_pixel_gt: HxW uint8
-            0 = road
-            1 = obstacle
+        @param label_pixel_gt_kp1: HxW uint8
+            [0, X] = usual classes
+            X+1 = obstacle
             255 = ignore
         @param anomaly_p: HxW float16
             heatmap of per-pixel anomaly detection, value from 0 to 1
@@ -105,19 +95,19 @@ class MetricPixelRecognition(EvaluationMetric):
         @param dset_name: dataset identifier, for saving extra outputs
         """
         try:
-            mask_roi_open_set = label_pixel_gt < 255
-            mask_roi_closed_set = label_pixel_gt < self.cfg.num_classes
+            mask_roi_open_set = label_pixel_gt_kp1 < 255
+            mask_roi_closed_set = label_pixel_gt_kp1 < self.cfg.num_classes
         except TypeError:
             raise RuntimeError(f"No ground truth available for {fid}. Please check dataset path...")
 
         closed_set_confusion_matrix = compute_confusion_matrix(
-            class_p, label_pixel_gt, mask_roi_closed_set, self.cfg.num_classes
+            class_p, label_pixel_gt_kp1, mask_roi_closed_set, self.cfg.num_classes
         )
 
         # visualization
         if visualize and fid is not None and dset_name is not None and method_name is not None:
             self.vis_frame(fid=fid, dset_name=dset_name, method_name=method_name, mask_roi=mask_roi_open_set,
-                           anomaly_p=anomaly_p, label_pixel_gt=label_pixel_gt, **_)
+                           anomaly_p=anomaly_p, label_pixel_gt=label_pixel_gt_kp1, **_)
         #print('Vrange', np.min(predictions_in_roi), np.mean(predictions_in_roi), np.max(predictions_in_roi))
 
         open_set_confusion_matrix = {}
@@ -125,7 +115,7 @@ class MetricPixelRecognition(EvaluationMetric):
             class_p_thr = class_p.copy()
             class_p_thr[anomaly_p > self.cfg.threshold[i]] = self.cfg.num_classes
             open_set_confusion_matrix[self.cfg.threshold_types[i]] = compute_confusion_matrix(
-                class_p_thr, label_pixel_gt, mask_roi_open_set, self.cfg.num_classes + 1)
+                class_p_thr, label_pixel_gt_kp1, mask_roi_open_set, self.cfg.num_classes + 1)
 
         return EasyDict(
             closed_set = closed_set_confusion_matrix,
@@ -158,7 +148,7 @@ class MetricPixelRecognition(EvaluationMetric):
         return out
 
     def persistence_path_data(self, method_name, dataset_name):
-        return DIR_OUTPUTS / self.name / 'data' / f'PixClassCurve_{method_name}_{dataset_name}.hdf5'
+        return DIR_OUTPUTS / self.name / 'data' / f'OpenSet_{method_name}_{dataset_name}.hdf5'
 
     def persistence_path_plot(self, comparison_name, plot_name):
         return DIR_OUTPUTS / self.name / 'plot' / f'{comparison_name}__{plot_name}'
@@ -184,8 +174,8 @@ class MetricPixelRecognition(EvaluationMetric):
             Series({**{f"open_miou@{k}": v for k, v in crv.open_miou.items()}, 'closed_miou': crv.closed_miou}, name=crv.method_name)
             for crv in aggregated_results
         ])
-        print(table)
-        save_table(self.persistence_path_plot(comparison_name, 'PixClassTable'), table)
+        # print(table)
+        save_table(self.persistence_path_plot(comparison_name, 'OpensetTable'), table)
 
     def init(self, method_name, dataset_name):
         self.get_thresh_p_from_curve(method_name, dataset_name)
@@ -197,6 +187,7 @@ class MetricPixelRecognition(EvaluationMetric):
             dataset_name = "IDDObstacleTrack-" + _dataset_name.split('-')[-1]
 
         out_path = DIR_OUTPUTS / "PixBinaryClass" / 'data' / f'PixClassCurve_{method_name}_{dataset_name}.hdf5'
+        assert os.path.isfile(out_path), f"To load dynamically thresholds ({out_path}) for the open-set evaluation, run evaluation on {dataset_name} first!"
         pixel_results = hdf5_read_hierarchy_from_file(out_path)
         self.cfg.threshold = [pixel_results.tpr95_threshold, pixel_results.fpr5_threshold, pixel_results.best_f1_threshold] + np.linspace(0.1, 0.9, num=9).tolist() + [0.99]
 

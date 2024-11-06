@@ -52,11 +52,19 @@ class DatasetIDD(DatasetBase):
         if sem_gt is not None:
             h, w = sem_gt.shape[:2]
             label = np.full((h, w), 255, dtype=np.uint8)
+            label_all = np.full((h, w), 255, dtype=np.uint8)
 
             label[self.mask_from_label_range(sem_gt, self.cfg.classes.usual)] = 0
             label[self.mask_from_label_range(sem_gt, self.cfg.classes.anomaly)] = 1
 
+            mask_usual = self.mask_from_label_range(sem_gt, self.cfg.classes.usual)
+            label_all[mask_usual] = sem_gt[mask_usual]
+            if isinstance(self.cfg.classes.usual, int):
+                label_all[self.mask_from_label_range(sem_gt, self.cfg.classes.anomaly)] = self.cfg.classes.usual + 1
+            else:
+                label_all[self.mask_from_label_range(sem_gt, self.cfg.classes.anomaly)] = max(self.cfg.classes.usual) + 1
             fr['label_pixel_gt'] = label
+            fr['label_pixel_gt_kp1'] = label_all
         elif wants_labels_explicitly:
             raise KeyError(f'No labels for {key} in {self}')
 

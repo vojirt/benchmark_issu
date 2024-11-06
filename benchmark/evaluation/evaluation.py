@@ -62,7 +62,6 @@ class Evaluation:
             log.exception('In writing result')
             raise e
 
-
     def save_output(self, frame, results):
         anomaly_p = results.anomaly_scores
         class_p = results.pred_id_labels
@@ -84,108 +83,6 @@ class Evaluation:
         write_func()
         write_func_id()
     
-
-    def run_metric_single(self, metric_name, sample=None, frame_vis=False, default_instancer=True, load_closed_set_preds=False, threshold=None):
-        # TODO sample is part of evaluation
-
-        metric = MetricRegistry.get(metric_name)
-        if threshold is not None:
-            metric.cfg.treshold = threshold
-        try:
-            if "Seg" in metric_name:
-                metric.cfg.default_instancer = default_instancer
-                if metric.cfg.thresh_p is None and default_instancer:
-                    metric.get_thresh_p_from_curve(self.method_name, self.dataset_name)
-            if "Int" in metric_name:
-                metric.cfg.default_instancer = default_instancer
-                if metric.cfg.threshold is None and default_instancer:
-                    thr = metric.get_thresh_p_from_curve(self.method_name, self.dataset_name)
-                    print(f"Using {metric.cfg.threshold_types} thresholds = {thr} for metric {metric_name} for method {self.method_name} on dataset {self.dataset_name}")
-        except AttributeError:
-            print("Perform 'PixBinaryClass' first")
-            exit()
-
-        fr_results = []
-
-        if sample is not None:
-            dset_name, frame_indices = sample
-
-            ds = DatasetRegistry.get(dset_name)
-            fr_iterable = (ds[i] for i in frame_indices)
-            fr_iterable_len = frame_indices.__len__()
-        else:
-            fr_iterable = self.get_dataset()
-            fr_iterable_len = fr_iterable.__len__()
-
-        frame_vis_only = frame_vis == 'only'
-        if not frame_vis_only:
-            for fr in tqdm(fr_iterable, total=fr_iterable_len):
-                frame = {"method_name": self.method_name, "dset_name": fr.dset_name, "fid": fr.fid}
-                fr["mask_path"] = self.channels['anomaly_mask_path'].format(**frame)
-
-                anomaly_p = self.channels['anomaly_p'].read(
-                    method_name = self.method_name,
-                    dset_name = fr.dset_name,
-                    fid = fr.fid,
-                )
-                anomaly_p = np.squeeze(anomaly_p)
-
-                if load_closed_set_preds:
-                    class_p = self.channels['class_p'].read(
-                        method_name = self.method_name,
-                        dset_name = fr.dset_name,
-                        fid = fr.fid,
-                    )
-                    class_p = np.squeeze(class_p)
-                else:
-                    class_p = None
-
-                fr_result = metric.process_frame(
-                    anomaly_p = anomaly_p,
-                    class_p = class_p,
-                    method_name = self.method_name,
-                    visualize = bool(frame_vis),
-                    **fr,
-                )
-                fr_results.append(fr_result)
-
-            return metric.aggregate(
-                fr_results,
-                method_name = self.method_name,
-                dataset_name = self.dataset_name,
-            )
-        else:
-            for fr in tqdm(fr_iterable, total=fr_iterable_len):
-                frame = {"method_name": self.method_name, "dset_name": fr.dset_name, "fid": fr.fid}
-                fr["mask_path"] = self.channels['anomaly_mask_path'].format(**frame)
-
-                anomaly_p = self.channels['anomaly_p'].read(
-                    method_name = self.method_name,
-                    dset_name = fr.dset_name,
-                    fid = fr.fid,
-                )
-                anomaly_p = np.squeeze(anomaly_p)
-
-                if load_closed_set_preds:
-                    class_p = self.channels['class_p'].read(
-                        method_name = self.method_name,
-                        dset_name = fr.dset_name,
-                        fid = fr.fid,
-                    )
-                    class_p = np.squeeze(class_p)
-                else:
-                    class_p = None
-
-                metric.vis_frame(
-                    fid=fr.fid, 
-                    dset_name=fr.dset_name, 
-                    method_name=self.method_name, 
-                    mask_roi=np.ones(fr.image.shape, dtype=bool),
-                    anomaly_p=anomaly_p,
-                    class_p=class_p,
-                    image = fr.image
-                )
-
     @classmethod
     def metric_worker(cls, method_name, metric_name, frame_vis, default_instancer, dataset_name_and_frame_idx, load_closed_set_preds=False, threshold=None):
         try:
@@ -254,9 +151,7 @@ class Evaluation:
             log.exception(f'Metric worker {e}')
             raise e
 
-
-    def run_metric_parallel(self, metric_name, sample=None, frame_vis=False, default_instancer=True, load_closed_set_preds=False, threshold=None):
-
+    def run_metric_parallel(self, metric_name, sample=None, frame_vis=False, default_instancer=True, load_closed_set_preds=False, threshold=None, parallel=True):
         metric = MetricRegistry.get(metric_name)
         if threshold is not None:
             metric.cfg.threshold = threshold
@@ -269,7 +164,7 @@ class Evaluation:
                 metric.cfg.default_instancer = default_instancer
                 if metric.cfg.threshold is None and default_instancer:
                     thr = metric.get_thresh_p_from_curve(self.method_name, self.dataset_name)
-                    print(f"Using {metric.cfg.threshold_types} thresholds = {thr} for metric {metric_name} for method {self.method_name} on dataset {self.dataset_name}")
+                    # print(f"Using {metric.cfg.threshold_types} thresholds = {thr} for metric {metric_name} for method {self.method_name} on dataset {self.dataset_name}")
         except AttributeError:
             print("Perform 'PixBinaryClass' first")
             exit()
@@ -280,7 +175,7 @@ class Evaluation:
             dset_name = self.dataset_name
             frame_indices = range(self.get_dataset().__len__())
 
-        processed_frames = Parallel(n_jobs=self.num_workers)(
+        processed_frames = Parallel(n_jobs=self.num_workers if parallel else 1)(
                 delayed(self.metric_worker)(self.method_name, metric_name, frame_vis, default_instancer, (dset_name, idx), load_closed_set_preds=load_closed_set_preds, threshold=threshold)
                 for idx in tqdm(frame_indices)
         ) 
@@ -301,10 +196,7 @@ class Evaluation:
 
         metric = MetricRegistry.get(metric_name)
 
-        if parallel:
-            ag = self.run_metric_parallel(metric_name, sample, frame_vis, default_instancer, load_closed_set_preds, threshold)
-        else:
-            ag = self.run_metric_single(metric_name, sample, frame_vis, default_instancer, load_closed_set_preds, threshold)
+        ag = self.run_metric_parallel(metric_name, sample, frame_vis, default_instancer, load_closed_set_preds, threshold, parallel)
 
         if ag is not None:
             dset_name = sample[0] if sample is not None else self.dataset_name
