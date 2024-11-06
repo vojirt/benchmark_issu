@@ -9,6 +9,7 @@ from joblib import Parallel, delayed
 from pandas import DataFrame, Series
 
 from datasets.dataset_io import hdf5_write_hierarchy_to_file, hdf5_read_hierarchy_from_file
+from print_results import get_results_for_exp
 
 
 def method_dummy(image, **_):
@@ -41,25 +42,6 @@ def result_loader_EAM(method_name, dset_name, fid, results_root_dir):
 
 
 def main(method_name, dataset_name, load_fn, results_root_dir, recompute_results, num_workers):
-    experiments_info = {
-            "IntersectionOverUnion" : {
-                "file_fmt" : "OpenSet_{method_name}_{dataset_name}.hdf5",
-                "valid_datasets": ["IDDAnomalyTrack-static", "IDDAnomalyTrack-temporal"],
-            },
-            "PixBinaryClass": {
-                "file_fmt" : "PixClassCurve_{method_name}_{dataset_name}.hdf5",
-                "valid_datasets": ["IDDObstacleTrack-static", "IDDObstacleTrack-temporal", "IDDAnomalyTrack-static", "IDDAnomalyTrack-temporal"],
-            },
-            "SegEval": {
-                "file_fmt" : "SegEvalResults_{method_name}_{dataset_name}.hdf5",
-                "valid_datasets": ["IDDObstacleTrack-static", "IDDObstacleTrack-temporal", "IDDAnomalyTrack-static", "IDDAnomalyTrack-temporal"],
-            },
-            "SegEval-Large": {
-                "file_fmt" : "SegEval-LargeResults_{method_name}_{dataset_name}.hdf5",
-                "valid_datasets": ["IDDObstacleTrack-static", "IDDObstacleTrack-temporal", "IDDAnomalyTrack-static", "IDDAnomalyTrack-temporal"],
-            },
-    }
-
     ev = Evaluation(
         method_name = method_name, 
         dataset_name = dataset_name,
@@ -91,16 +73,7 @@ def main(method_name, dataset_name, load_fn, results_root_dir, recompute_results
             frame_vis=False,
         )
         # for table plot
-        filename = os.path.join("./outputs/", exp, "data", 
-                                experiments_info[exp]["file_fmt"].format(method_name=method_name, dataset_name=dataset_name))
-        res_data = hdf5_read_hierarchy_from_file(filename)
-        if exp == "PixBinaryClass":
-            res_dict["AP"] = 100*res_data.area_PRC 
-            res_dict["FPR@95TPR"] = 100*res_data.tpr95_fpr 
-        elif exp == "SegEval":
-            res_dict["mF1(all)"] = 100*res_data.f1_mean 
-        elif exp == "SegEval-Large":
-            res_dict["mF1(Large)"] = 100*res_data.f1_mean 
+        res_dict.update(get_results_for_exp(exp, method_name, dataset_name))
 
     if "Anomaly" in dataset_name:
         exp = "IntersectionOverUnion"
@@ -111,13 +84,7 @@ def main(method_name, dataset_name, load_fn, results_root_dir, recompute_results
             parallel=True,
             load_closed_set_preds=True,
         )
-        filename = os.path.join("./outputs/", exp, "data", 
-                                experiments_info[exp]["file_fmt"].format(method_name=method_name, dataset_name=dataset_name))
-        res_data = hdf5_read_hierarchy_from_file(filename)
-        res_dict["closed-mIoU"] = 100*res_data.closed_miou 
-        res_dict["open-mIoU@best_f1"] = 100*res_data.open_miou["best_f1"]
-        res_dict["open-mIoU@tpr95"] = 100*res_data.open_miou["tpr95"]
-        res_dict["open-mIoU@fpr05"] = 100*res_data.open_miou["fpr05"]
+        res_dict.update(get_results_for_exp(exp, method_name, dataset_name))
 
     table = DataFrame(data=[Series(res_dict, name=method_name)])
     print(f"\n===== {dataset_name} =====")
