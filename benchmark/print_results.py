@@ -19,8 +19,20 @@ experiments_info = {
             "file_fmt" : "SegEvalResults_{method_name}_{dataset_name}.hdf5",
             "valid_datasets": ["IDDObstacleTrack-static", "IDDObstacleTrack-temporal", "IDDAnomalyTrack-static", "IDDAnomalyTrack-temporal"],
         },
+        "SegEval-TooSmall": {
+            "file_fmt" : "SegEval-TooSmallResults_{method_name}_{dataset_name}.hdf5",
+            "valid_datasets": ["IDDObstacleTrack-static", "IDDObstacleTrack-temporal", "IDDAnomalyTrack-static", "IDDAnomalyTrack-temporal"],
+        },
+        "SegEval-Small": {
+            "file_fmt" : "SegEval-SmallResults_{method_name}_{dataset_name}.hdf5",
+            "valid_datasets": ["IDDObstacleTrack-static", "IDDObstacleTrack-temporal", "IDDAnomalyTrack-static", "IDDAnomalyTrack-temporal"],
+        },
         "SegEval-Large": {
             "file_fmt" : "SegEval-LargeResults_{method_name}_{dataset_name}.hdf5",
+            "valid_datasets": ["IDDObstacleTrack-static", "IDDObstacleTrack-temporal", "IDDAnomalyTrack-static", "IDDAnomalyTrack-temporal"],
+        },
+        "SegEval-VeryLarge": {
+            "file_fmt" : "SegEval-VeryLargeResults_{method_name}_{dataset_name}.hdf5",
             "valid_datasets": ["IDDObstacleTrack-static", "IDDObstacleTrack-temporal", "IDDAnomalyTrack-static", "IDDAnomalyTrack-temporal"],
         },
 }
@@ -36,8 +48,14 @@ def get_results_for_exp(exp, method_name, dataset_name, result_dir="./outputs/")
             res_dict["FPR@95TPR"] = 100*tmp_data.tpr95_fpr 
         elif exp == "SegEval":
             res_dict["mF1(all)"] = 100*tmp_data.f1_mean 
+        elif exp == "SegEval-TooSmall":
+            res_dict["mF1(TooSmall)"] = 100*tmp_data.f1_mean 
+        elif exp == "SegEval-Small":
+            res_dict["mF1(Small)"] = 100*tmp_data.f1_mean 
         elif exp == "SegEval-Large":
             res_dict["mF1(Large)"] = 100*tmp_data.f1_mean 
+        elif exp == "SegEval-VeryLarge":
+            res_dict["mF1(VeryLarge)"] = 100*tmp_data.f1_mean 
         elif exp == "IntersectionOverUnion":
             res_dict["closed-mIoU"] = 100*tmp_data.closed_miou 
             res_dict["open-mIoU@best_f1"] = 100*tmp_data.open_miou["best_f1"]
@@ -48,7 +66,7 @@ def get_results_for_exp(exp, method_name, dataset_name, result_dir="./outputs/")
 
 if __name__ == "__main__":
     result_root_dir = "./outputs/"
-    experiments = ["PixBinaryClass", "SegEval", "SegEval-Large", "IntersectionOverUnion"]
+    experiments = ["PixBinaryClass", "SegEval", "SegEval-TooSmall", "SegEval-Small", "SegEval-Large", "SegEval-VeryLarge", "IntersectionOverUnion"]
 
     dataset_names = ["IDDObstacleTrack-static", "IDDObstacleTrack-temporal", "IDDAnomalyTrack-static", "IDDAnomalyTrack-temporal"]
     method_names = ["PixOOD_IDD_RA"] 

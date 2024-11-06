@@ -17,7 +17,21 @@ CMAP = get_cmap('magma')
 
 
 def default_instancer(anomaly_p: np.ndarray, label_pixel_gt: np.ndarray, thresh_p: float,
-                      thresh_segsize: int, thresh_instsize: int = 0):
+                      thresh_segsize, thresh_instsize):
+
+    if isinstance(thresh_segsize, list):
+        thresh_segsize_low = thresh_segsize[0]
+        thresh_segsize_high = thresh_segsize[1]
+    else:
+        thresh_segsize_low = thresh_segsize
+        thresh_segsize_high = 1e12
+
+    if isinstance(thresh_instsize, list):
+        thresh_instsize_low = thresh_instsize[0]
+        thresh_instsize_high = thresh_instsize[1]
+    else:
+        thresh_instsize_low = thresh_instsize
+        thresh_instsize_high = 1e12
 
     """segmentation from pixel-wise anoamly scores"""
     segmentation = np.copy(anomaly_p)
@@ -37,15 +51,17 @@ def default_instancer(anomaly_p: np.ndarray, label_pixel_gt: np.ndarray, thresh_
 
     """remove connected components below size threshold"""
     if thresh_segsize is not None:
-        minimum_cc_sum  = thresh_segsize
         labeled_mask = np.copy(anomaly_seg_pred)
         for comp in range(n_seg_pred+1):
-            if len(anomaly_seg_pred[labeled_mask == comp]) < minimum_cc_sum:
+            area = len(anomaly_seg_pred[labeled_mask == comp]) 
+            if area < thresh_segsize_low or area >= thresh_segsize_high:
                 anomaly_seg_pred[labeled_mask == comp] = 0
+
     labeled_mask = np.copy(anomaly_instances)
     label_pixel_gt = label_pixel_gt.copy() # copy for editing
     for comp in range(n_anomaly + 1):
-        if len(anomaly_instances[labeled_mask == comp]) < thresh_instsize:
+        area = len(anomaly_instances[labeled_mask == comp])
+        if area < thresh_instsize_low or area >= thresh_instsize_high: 
             label_pixel_gt[labeled_mask == comp] = 255
 
     """restrict to region of interest"""
@@ -158,14 +174,37 @@ class ResultsInfo:
 
 @MetricRegistry.register_class()
 class MetricSegment(EvaluationMetric):
+    PRED_SIZES_NOISE_FACTORS = [0.5, 2.0]
+
     configs = [
         EasyDict(
             name='SegEval',
             thresh_p=None,
             thresh_sIoU=np.linspace(0.25, 0.75, 11, endpoint=True),
-            # NOTE: this was used as default for AnomalyTrack in SMIYC benchmark
-            thresh_segsize=50,
-            thresh_instsize=10,
+            # NOTE: smallest anomaly size in the dataset (in fact, there are smaller instances, 
+            # but the 7x7 is a good estimate of reasonable smallest size to be
+            # detectable). This is aligned with SMIYC where the smallest
+            # anomaly in dataset is of size 50 (based on the published paper).
+            thresh_segsize=7*7,
+            thresh_instsize=7*7,
+        ),
+        EasyDict(
+            name='SegEval-TooSmall',
+            thresh_p=None,
+            thresh_sIoU=np.linspace(0.25, 0.75, 11, endpoint=True),
+            # NOTE: 16x is most common downsampling of most backbone architectures
+            #       -> define size as multiples of that
+            thresh_segsize=[7*7, PRED_SIZES_NOISE_FACTORS[1] * 16*16],
+            thresh_instsize=[7*7, 16*16],
+        ),
+        EasyDict(
+            name='SegEval-Small',
+            thresh_p=None,
+            thresh_sIoU=np.linspace(0.25, 0.75, 11, endpoint=True),
+            # NOTE: 16x is most common downsampling of most backbone architectures
+            #       -> define size as multiples of that
+            thresh_segsize=[PRED_SIZES_NOISE_FACTORS[0] * 16*16, PRED_SIZES_NOISE_FACTORS[1] * 3*3*16*16],
+            thresh_instsize=[16*16, 3*3*16*16],
         ),
         EasyDict(
             name='SegEval-Large',
@@ -173,8 +212,17 @@ class MetricSegment(EvaluationMetric):
             thresh_sIoU=np.linspace(0.25, 0.75, 11, endpoint=True),
             # NOTE: 16x is most common downsampling of most backbone architectures
             #       -> define size as multiples of that
-            thresh_segsize=4*16*16,   
-            thresh_instsize=4*16*16,
+            thresh_segsize=[PRED_SIZES_NOISE_FACTORS[0] * 3*3*16*16, PRED_SIZES_NOISE_FACTORS[1] * 7*7*16*16],
+            thresh_instsize=[3*3*16*16, 7*7*16*16],
+        ),
+        EasyDict(
+            name='SegEval-VeryLarge',
+            thresh_p=None,
+            thresh_sIoU=np.linspace(0.25, 0.75, 11, endpoint=True),
+            # NOTE: 16x is most common downsampling of most backbone architectures
+            #       -> define size as multiples of that
+            thresh_segsize=PRED_SIZES_NOISE_FACTORS[0] * 7*7*16*16,
+            thresh_instsize=7*7*16*16,
         )
     ]
 

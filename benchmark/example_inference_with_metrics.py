@@ -70,7 +70,7 @@ def main(method_name, dataset_name, load_fn, results_root_dir, recompute_results
         print("Skipping results computation.")
 
     res_dict = {}
-    exps = ["PixBinaryClass", "SegEval", "SegEval-Large"]
+    exps = ["PixBinaryClass", "SegEval", "SegEval-TooSmall", "SegEval-Small", "SegEval-Large", "SegEval-VeryLarge"]
     for exp in exps:
         print(f"Calculating {exp} metrics")
         ev.calculate_metric_from_saved_outputs(
@@ -99,7 +99,7 @@ def main(method_name, dataset_name, load_fn, results_root_dir, recompute_results
 
 if __name__ == '__main__':
     num_workers = 16
-    recompute_results = True
+    recompute_results = False
 
     # method_names = ["EAM_FT"]
     method_names = ["PixOOD_IDD_RA"]
