@@ -69,22 +69,22 @@ class MetricPixelRecognition(EvaluationMetric):
         heatmap_color = adapt_img_data(anomaly_p)
         canvas[mask_roi] = canvas[mask_roi]//2 + heatmap_color[mask_roi]//2
         imwrite(
-            DIR_OUTPUTS / f'vis_PixelClassification' / method_name / dset_name / f'{fid}_demo_anomalyP.webp',
+            DIR_OUTPUTS / f'vis_OpensetClassification' / method_name / dset_name / f'{fid}_demo_anomalyP.webp',
             canvas,
         )
 
         anomaly_heat = get_heat(anomaly_p, overlay=label_pixel_gt)
         imwrite(
-            DIR_OUTPUTS / f'vis_PixelClassification' / method_name / dset_name / f'{fid}_demo_anomalyP_heat.webp',
+            DIR_OUTPUTS / f'vis_OpensetClassification' / method_name / dset_name / f'{fid}_demo_anomalyP_heat.webp',
             anomaly_heat,
         )
 
 
-    def process_frame(self, label_pixel_gt : np.ndarray, anomaly_p : np.ndarray, class_p : np.ndarray, fid : str=None, dset_name : str=None, method_name : str=None, visualize : bool = True, **_):
+    def process_frame(self, label_pixel_gt_kp1 : np.ndarray, anomaly_p : np.ndarray, class_p : np.ndarray, fid : str=None, dset_name : str=None, method_name : str=None, visualize : bool = True, **_):
         """
-        @param label_pixel_gt: HxW uint8
-            0 = road
-            1 = obstacle
+        @param label_pixel_gt_kp1: HxW uint8
+            [0, X] = usual classes
+            X+1 = obstacle
             255 = ignore
         @param anomaly_p: HxW float16
             heatmap of per-pixel anomaly detection, value from 0 to 1
@@ -94,19 +94,19 @@ class MetricPixelRecognition(EvaluationMetric):
         @param dset_name: dataset identifier, for saving extra outputs
         """
         try:
-            mask_roi_open_set = label_pixel_gt < 255
-            mask_roi_closed_set = label_pixel_gt < self.cfg.num_classes
+            mask_roi_open_set = label_pixel_gt_kp1 < 255
+            mask_roi_closed_set = label_pixel_gt_kp1 < self.cfg.num_classes
         except TypeError:
             raise RuntimeError(f"No ground truth available for {fid}. Please check dataset path...")
 
         closed_set_confusion_matrix = compute_confusion_matrix(
-            class_p, label_pixel_gt, mask_roi_closed_set, self.cfg.num_classes
+            class_p, label_pixel_gt_kp1, mask_roi_closed_set, self.cfg.num_classes
         )
 
         # visualization
         if visualize and fid is not None and dset_name is not None and method_name is not None:
             self.vis_frame(fid=fid, dset_name=dset_name, method_name=method_name, mask_roi=mask_roi_open_set,
-                           anomaly_p=anomaly_p, label_pixel_gt=label_pixel_gt, **_)
+                           anomaly_p=anomaly_p, label_pixel_gt=label_pixel_gt_kp1, **_)
         #print('Vrange', np.min(predictions_in_roi), np.mean(predictions_in_roi), np.max(predictions_in_roi))
 
         open_set_confusion_matrix = {}
@@ -114,7 +114,7 @@ class MetricPixelRecognition(EvaluationMetric):
             class_p_thr = class_p.copy()
             class_p_thr[anomaly_p > self.cfg.threshold[i]] = self.cfg.num_classes
             open_set_confusion_matrix[self.cfg.threshold_types[i]] = compute_confusion_matrix(
-                class_p_thr, label_pixel_gt, mask_roi_open_set, self.cfg.num_classes + 1)
+                class_p_thr, label_pixel_gt_kp1, mask_roi_open_set, self.cfg.num_classes + 1)
 
         return EasyDict(
             closed_set = closed_set_confusion_matrix,
