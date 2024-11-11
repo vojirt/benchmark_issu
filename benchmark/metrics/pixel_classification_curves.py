@@ -50,8 +50,26 @@ class BinaryClassificationCurve:
 
 
 def curves_from_cmats(cmats, thresholds, debug_thresholds=False):
+    # The threshold goes from high to low
+    # The thresholds are independent for each frame which can result in repeated thresholds.
+    # Here we collapse those segments of the curve that would be caused by repeated thresholds.
+    # We choose the indices where each threshold appears for the last time.
+    # This means that all the samples for this threshold have been accounted for. 
+    # Thanks to Jan Ackermann from ETHZ for reporting problems with the AP curves.
+
+    thr_unique_indices = np.nonzero(thresholds[:-1] != thresholds[1:])[0]
+    if thr_unique_indices[0] != 0 and thresholds[thr_unique_indices[0]] != thresholds[0]:
+        thr_unique_indices = np.concatenate([[0], thr_unique_indices])  
+    if thr_unique_indices[-1] != cmats.__len__()-1 and thresholds[thr_unique_indices[-1] ] != thresholds[cmats.__len__()-1]:
+        thr_unique_indices = np.concatenate([thr_unique_indices, [cmats.__len__()-1]])
+    # print(f'Reducing sample numbers from {len(thresholds)} thresholds and {len(cmats)} cmats to {len(thr_unique_indices)}')
+
+    # Ignore the entries for repeated thresholds.
+    cmats = cmats[thr_unique_indices]
+    thresholds = thresholds[thr_unique_indices]
+
     assert np.all(thresholds[:-1] != thresholds[1:]), f"CURVES_FROM_CMATS: Same threshold values detected! {thresholds}"
-    
+
     tp = cmats[:, 0, 0]
     fp = cmats[:, 0, 1]
     fn = cmats[:, 1, 0]
