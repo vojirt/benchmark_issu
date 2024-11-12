@@ -52,6 +52,17 @@ TEMPORAL_LOWLIGHT = ["25", "17", "45", "91", "41", "40", "33", "38", "52",
                      "39", "72", "93", "94", "31", "54", "15", "96", "88",
                      "85", "32", "20", "5", "42", "80", "83"]
 
+VP0= ['0', '100', '101', '102', '12', '15', '18', '20', '21', '22', '23', '26',
+      '28', '29', '3', '30', '31', '32', '34', '35', '36', '37', '39', '43',
+      '44', '49', '50', '52', '53', '54', '57', '59', '60', '63', '66', '70',
+      '71', '72', '73', '74', '75', '77', '8', '81', '83', '84', '85', '87',
+      '88', '89', '9', '90', '92', '93', '94', '95', '96', '97', '98', '99']
+VP1= ['1', '10', '13', '16', '2', '27', '42', '46', '47', '48', '5', '55',
+      '56', '58', '64', '65', '67', '68', '69', '7', '76', '78', '80', '82', '86']
+VP2= ['11', '14', '24', '51', '61', '62', '79']
+VP3= ['17', '19', '25', '33', '38', '4', '40', '41', '45', '6', '91']
+
+
 class DatasetIDD(DatasetBase):
     def __init__(self, cfg):
         super().__init__(cfg)
@@ -118,6 +129,13 @@ class DatasetIDD(DatasetBase):
             fr for fr in frame_list
             if (fr.fid.split('_')[0] in self.cfg.scenes) and (fr.fid.split('_')[1] not in self.cfg.exclude)
         ]
+        
+        if hasattr(self.cfg, "include"):
+            frames_filtered = [
+                fr for fr in frames_filtered
+                if (fr.fid.split('_')[1] in self.cfg.include)
+            ]
+
         super().set_frames(frames_filtered)
 
 
@@ -143,6 +161,10 @@ class DatasetIDDAnomalyTrack(DatasetIDD):
         'temporal',
         'temporalNormal',
         'temporalLowLight',
+        'temporal_vp0',
+        'temporal_vp1',
+        'temporal_vp2',
+        'temporal_vp3',
     }
 
     configs = [
@@ -200,6 +222,42 @@ class DatasetIDDAnomalyTrack(DatasetIDD):
             scenes ={'temporal'},
             expected_length = 270, 
             exclude = TEMPORAL_NORMAL,
+            **DEFAULTS,
+        ),
+        dict(
+            # temporal
+            name = 'IDDAnomalyTrack-temporalVP0',
+            scenes ={'temporal'},
+            expected_length = 675,
+            exclude = [],
+            include = VP0,
+            **DEFAULTS,
+        ),
+        dict(
+            # temporal
+            name = 'IDDAnomalyTrack-temporalVP1',
+            scenes ={'temporal'},
+            expected_length = 269,
+            exclude = [],
+            include = VP1,
+            **DEFAULTS,
+        ),
+        dict(
+            # temporal
+            name = 'IDDAnomalyTrack-temporalVP2',
+            scenes ={'temporal'},
+            expected_length = 72,
+            exclude = [],
+            include = VP2,
+            **DEFAULTS,
+        ),
+        dict(
+            # temporal
+            name = 'IDDAnomalyTrack-temporalVP3',
+            scenes ={'temporal'},
+            expected_length = 122,
+            exclude = [],
+            include = VP3,
             **DEFAULTS,
         )
     ]
