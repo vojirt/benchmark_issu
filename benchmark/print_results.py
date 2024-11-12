@@ -45,6 +45,7 @@ def get_results_for_exp(exp, method_name, dataset_name, result_dir="./outputs/")
         if exp == "PixBinaryClass":
             res_dict["AP"] = 100*tmp_data.area_PRC 
             res_dict["FPR@95TPR"] = 100*tmp_data.tpr95_fpr 
+            res_dict["TPR@5FPR"] = 100*tmp_data.fpr5_tpr 
         elif exp == "SegEval":
             res_dict["mF1(all)"] = 100*tmp_data.f1_mean 
         elif exp == "SegEval-TooSmall":
