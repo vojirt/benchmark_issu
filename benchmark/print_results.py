@@ -47,15 +47,25 @@ def get_results_for_exp(exp, method_name, dataset_name, result_dir="./outputs/")
             res_dict["FPR@95TPR"] = 100*tmp_data.tpr95_fpr 
             res_dict["TPR@5FPR"] = 100*tmp_data.fpr5_tpr 
         elif exp == "SegEval":
-            res_dict["mF1(all)"] = 100*tmp_data.f1_mean 
+            res_dict["mF1(all)"] = 100*tmp_data.f1_mean
+            res_dict["sIoU_gt(all)"] = 100*tmp_data.sIoU_gt
+            res_dict["PPV(all)"] = 100*tmp_data.prec_pred
         elif exp == "SegEval-TooSmall":
-            res_dict["mF1(TooSmall)"] = 100*tmp_data.f1_mean 
+            res_dict["mF1(TooSmall)"] = 100*tmp_data.f1_mean
+            res_dict["sIoU_gt(TooSmall)"] = 100*tmp_data.sIoU_gt
+            res_dict["PPV(TooSmall)"] = 100*tmp_data.prec_pred
         elif exp == "SegEval-Small":
-            res_dict["mF1(Small)"] = 100*tmp_data.f1_mean 
+            res_dict["mF1(Small)"] = 100*tmp_data.f1_mean
+            res_dict["sIoU_gt(Small)"] = 100*tmp_data.sIoU_gt
+            res_dict["PPV(Small)"] = 100*tmp_data.prec_pred
         elif exp == "SegEval-Large":
-            res_dict["mF1(Large)"] = 100*tmp_data.f1_mean 
+            res_dict["mF1(Large)"] = 100*tmp_data.f1_mean
+            res_dict["sIoU_gt(Large)"] = 100*tmp_data.sIoU_gt
+            res_dict["PPV(Large)"] = 100*tmp_data.prec_pred
         elif exp == "SegEval-VeryLarge":
-            res_dict["mF1(VeryLarge)"] = 100*tmp_data.f1_mean 
+            res_dict["mF1(VeryLarge)"] = 100*tmp_data.f1_mean
+            res_dict["sIoU_gt(VeryLarge)"] = 100*tmp_data.sIoU_gt
+            res_dict["PPV(VeryLarge)"] = 100*tmp_data.prec_pred
         elif exp == "IntersectionOverUnion":
             res_dict["closed-mIoU"] = 100*tmp_data.closed_miou 
             res_dict["open-mIoU@best_f1"] = 100*tmp_data.open_miou["best_f1"]
