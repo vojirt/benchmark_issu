@@ -44,7 +44,7 @@ python3 -m pip install -r requirements.txt
 
 
 ## Benchmarking
-Instructions for storing predictions for ISSU-Test sets are provided [here](https://github.com/vojirt/benchmark_issu/blob/main/benchmark/predictions/PREDICTIONS.md). The evaluation script `example_inference_with_metrics` performs the benchmarking for different methods `(e.g. EAM, YOUR_METHOD)` whose predictions are stored in `benchmark/predictions/{EAM/YOUR_METHOD}`. Protocols can be selected with `--protocol` argument. By default, closed-set and open-set protocols are evaluated when `anomaly` protocol is selected. Also, by default, benchmarked outputs are saved in `outputs`. Finally, `print_results` prints the final metrics similar to presented in the paper in `outputs/results.md`.
+Instructions for storing predictions for ISSU-Test sets are provided [here](https://github.com/vojirt/benchmark_issu/blob/main/benchmark/predictions/PREDICTIONS.md). The evaluation script `example_inference_with_metrics` performs the benchmarking for different methods `(e.g. EAM, YOUR_METHOD)` whose predictions are stored in `benchmark/predictions/{EAM/YOUR_METHOD}`. Protocols can be selected with `--protocol` argument. By default, closed-set and open-set protocols are evaluated when `anomaly` protocol is selected. Also, by default, benchmarked outputs are saved in `outputs`. Finally, `print_results` prints the final metrics similar to results presented in the paper in `outputs/results.md`.
 ```bash
 cd benchmark
 python example_inference_with_metrics.py --method EAM,YOUR_METHOD --result_path ./predictions --protocol {obstacle,anomaly,all}
