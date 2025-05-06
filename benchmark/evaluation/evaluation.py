@@ -1,0 +1,213 @@
+
+from pathlib import Path
+from os import environ
+from functools import partial
+from joblib import Parallel, delayed 
+import logging
+
+import numpy as np
+from tqdm import tqdm
+
+from paths import DIR_SRC, DIR_OUTPUTS
+from datasets import DatasetRegistry
+from datasets.dataset_io import ChannelLoaderHDF5
+from metrics import MetricRegistry
+
+
+try:
+    import cv2 as cv
+except:
+    ...
+
+log = logging.getLogger(__name__)
+
+
+
+class Evaluation:
+
+    channels = {
+        'anomaly_p': ChannelLoaderHDF5(
+            str(DIR_OUTPUTS / "anomaly_p/{method_name}/{dset_name}/{fid}.hdf5"),
+            compression = 9,
+        ),
+        'class_p': ChannelLoaderHDF5(
+            str(DIR_OUTPUTS / "class_p/{method_name}/{dset_name}/{fid}.hdf5"),
+            compression = 9,
+        ),
+        'anomaly_mask_path': str(DIR_OUTPUTS / "anomaly_masks/{method_name}/{dset_name}/{fid}.png"),
+        'class_mask_path': str(DIR_OUTPUTS / "class_masks/{method_name}/{dset_name}/{fid}.png")
+    }
+
+    threads = None
+
+    def __init__(self, method_name, dataset_name, num_workers=8):
+        self.method_name = method_name
+        self.dataset_name = dataset_name
+        self.num_workers = num_workers
+
+    def get_dataset(self):
+        return DatasetRegistry.get(self.dataset_name)
+
+    def get_frames(self):
+        return self.get_dataset().iter('image')
+
+    def __len__(self):
+        return self.get_dataset().__len__()
+
+    @staticmethod
+    def write_task(channel, value, extra):
+        try:
+            channel.write(value, **extra)
+        except Exception as e:
+            log.exception('In writing result')
+            raise e
+
+    def save_output(self, frame, results):
+        anomaly_p = results.anomaly_scores
+        class_p = results.pred_id_labels
+
+        write_func = partial(
+            self.write_task, 
+            self.channels['anomaly_p'], 
+            anomaly_p.astype(np.float16), 
+            dict(method_name = self.method_name, **frame),
+        )
+
+        write_func_id = partial(
+            self.write_task, 
+            self.channels['class_p'], 
+            class_p.astype(np.uint8),
+            dict(method_name = self.method_name, **frame),
+        )
+
+        write_func()
+        write_func_id()
+    
+    @classmethod
+    def metric_worker(cls, method_name, metric_name, frame_vis, default_instancer, dataset_name_and_frame_idx, load_closed_set_preds=False, threshold=None):
+        try:
+            dataset_name, frame_idx = dataset_name_and_frame_idx
+
+            dset = DatasetRegistry.get(dataset_name)
+            metric = MetricRegistry.get(metric_name)
+            if threshold is not None:
+                metric.cfg.treshold = threshold
+
+            frame_vis_only = frame_vis == 'only'
+
+            if default_instancer:
+                metric.init(method_name, dataset_name)
+
+            if not frame_vis_only:
+                fr = dset[frame_idx]
+            else:
+                fr = dset.get_frame(frame_idx, 'image')
+
+            frame = {"method_name": method_name, "dset_name": fr.dset_name, "fid": fr.fid}
+            fr["mask_path"] = cls.channels['anomaly_mask_path'].format(**frame)
+
+            if default_instancer:
+                heatmap = cls.channels['anomaly_p'].read(
+                    method_name=method_name,
+                    dset_name=fr.dset_name,
+                    fid=fr.fid,
+                )
+                heatmap = np.squeeze(heatmap)
+                if heatmap.shape[1] < fr.image.shape[1]:
+                    heatmap = cv.resize(heatmap.astype(np.float32), fr.image.shape[:2][::-1],
+                                        interpolation=cv.INTER_LINEAR)
+
+                if load_closed_set_preds:
+                    class_p = cls.channels['class_p'].read(
+                        method_name = method_name,
+                        dset_name = fr.dset_name,
+                        fid = fr.fid,
+                    )
+                    class_p = np.squeeze(class_p)
+                else:
+                    class_p = None
+            else:
+                heatmap = None
+
+            if not frame_vis_only:
+                result = metric.process_frame(
+                    anomaly_p = heatmap,
+                    class_p = class_p,
+                    method_name = method_name,
+                    visualize = bool(frame_vis),
+                    **fr,
+                )
+                return result
+            else:
+                h, w, _ = fr.image.shape
+                metric.vis_frame(
+                    anomaly_p = heatmap,
+                    method_name = method_name, 
+                    mask_roi = np.ones((h, w), dtype=bool),
+                    **fr,
+                )
+
+        except Exception as e:
+            log.exception(f'Metric worker {e}')
+            raise e
+
+    def run_metric_parallel(self, metric_name, sample=None, frame_vis=False, default_instancer=True, load_closed_set_preds=False, threshold=None, parallel=True):
+        metric = MetricRegistry.get(metric_name)
+        if threshold is not None:
+            metric.cfg.threshold = threshold
+        try:
+            if "Seg" in metric_name:
+                metric.cfg.default_instancer = default_instancer
+                if metric.cfg.thresh_p is None and default_instancer:
+                    metric.get_thresh_p_from_curve(self.method_name, self.dataset_name)
+            if "Int" in metric_name:
+                metric.cfg.default_instancer = default_instancer
+                if metric.cfg.threshold is None and default_instancer:
+                    thr = metric.get_thresh_p_from_curve(self.method_name, self.dataset_name)
+                    # print(f"Using {metric.cfg.threshold_types} thresholds = {thr} for metric {metric_name} for method {self.method_name} on dataset {self.dataset_name}")
+        except AttributeError:
+            print("Perform 'PixBinaryClass' first")
+            exit()
+
+        if sample is not None:
+            dset_name, frame_indices = sample
+        else:
+            dset_name = self.dataset_name
+            frame_indices = range(self.get_dataset().__len__())
+
+        processed_frames = Parallel(n_jobs=self.num_workers if parallel else 1)(
+                delayed(self.metric_worker)(self.method_name, metric_name, frame_vis, default_instancer, (dset_name, idx), load_closed_set_preds=load_closed_set_preds, threshold=threshold)
+                for idx in tqdm(frame_indices)
+        ) 
+
+        frame_vis_only = frame_vis == 'only'
+        if not frame_vis_only:
+            ag = metric.aggregate(  
+                processed_frames,
+                method_name = self.method_name,
+                dataset_name = dset_name,
+            )
+            
+            return ag
+    
+
+    def calculate_metric_from_saved_outputs(self, metric_name, sample=None, parallel=True, show_plot=False,
+                                            frame_vis=False, default_instancer=True, load_closed_set_preds=False, threshold=None):
+
+        metric = MetricRegistry.get(metric_name)
+
+        ag = self.run_metric_parallel(metric_name, sample, frame_vis, default_instancer, load_closed_set_preds, threshold, parallel)
+
+        if ag is not None:
+            dset_name = sample[0] if sample is not None else self.dataset_name
+
+            metric.save(
+                ag, 
+                method_name = self.method_name,
+                dataset_name = dset_name,
+            )
+
+            metric.plot_single(ag, close = not show_plot)
+
+            return ag
+
